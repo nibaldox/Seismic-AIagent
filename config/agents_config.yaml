@@ -1,0 +1,626 @@
+# Seismic Analysis Agents Configuration
+# This file contains all agent configurations for the SeismoAnalyzer Pro system
+# Modify this file to customize agent behavior, models, and capabilities
+
+# =============================================================================
+# GLOBAL SETTINGS
+# =============================================================================
+
+global:
+  # Default language for all agent responses
+  language: "spanish"
+
+  # Output format requirements
+  output_format:
+    dual_layer: true  # Technical + plain language
+    technical_first: true
+    include_confidence: true
+    max_recommendations: 3
+
+  # Agent behavior settings
+  behavior:
+    max_retries: 2
+    enable_caching: true
+    log_level: "info"
+
+# =============================================================================
+# MODEL CONFIGURATION
+# =============================================================================
+
+models:
+  # Primary model hierarchy (used for fallback logic)
+  hierarchy:
+    primary: "deepseek/deepseek-chat-v3.1:free"
+    secondary: "nvidia/nemotron-nano-9b-v2:free"
+    tertiary: "google/gemma-3-27b-it:free"
+
+  # Model capabilities and specializations
+  capabilities:
+    deepseek_chat:
+      model: "deepseek/deepseek-chat-v3.1:free"
+      strengths: ["reasoning", "analysis", "spanish_language"]
+      weaknesses: ["real_time", "creative_writing"]
+      cost_per_token: 0.0
+      context_window: 131072
+
+    kimi_k2:
+      model: "moonshotai/kimi-k2"
+      strengths: ["multilingual", "code_generation", "consistency"]
+      weaknesses: ["very_long_contexts"]
+      cost_per_token: 0.0
+      context_window: 131072
+
+    gemma_3:
+      model: "google/gemma-3-27b-it:free"
+      strengths: ["fast_inference", "mathematics", "structured_output"]
+      weaknesses: ["complex_reasoning", "spanish_nuances"]
+      cost_per_token: 0.0
+      context_window: 131072
+
+# =============================================================================
+# ANALYSIS AGENTS
+# =============================================================================
+
+agents:
+  # Core waveform analysis agent
+  waveform_analyzer:
+    name: "Analizador de Formas de Onda"
+    description: "Analiza trazas sísmicas para detectar fases P/S, características y anomalías"
+    model: "deepseek/deepseek-chat-v3.1:free"
+    fallback_models: ["moonshotai/kimi-k2", "google/gemma-3-27b-it:free"]
+
+    capabilities:
+      - phase_detection
+      - signal_characterization
+      - noise_analysis
+      - quality_assessment
+
+    parameters:
+      confidence_threshold: 0.7
+      max_phases_to_detect: 5
+      include_uncertainty: true
+
+    prompts:
+      system: |
+        Eres un sismólogo experto especializado en análisis de formas de onda.
+        Tu tarea es analizar trazas sísmicas y proporcionar interpretaciones técnicas precisas.
+
+      analysis: |
+        Analiza la siguiente forma de onda sísmica:
+
+        {waveform_data}
+
+        Proporciona:
+        1. **Resumen técnico**: Llegadas P/S detectadas, características de la señal, incertidumbres
+        2. **Explicación clara**: Describe en términos sencillos qué observas, con 2-3 recomendaciones prácticas
+
+        Responde en español con confianza alta/media/baja para cada conclusión.
+
+  # Histogram and telemetry analysis agent
+  histogram_analyzer:
+    name: "Analizador de Histogramas"
+    description: "Analiza datos de histogramas y telemetría para detectar tendencias y anomalías"
+    model: "deepseek/deepseek-chat-v3.1:free"
+    fallback_models: ["moonshotai/kimi-k2", "google/gemma-3-27b-it:free"]
+
+    capabilities:
+      - trend_analysis
+      - anomaly_detection
+      - threshold_identification
+      - correlation_analysis
+
+    parameters:
+      time_window_analysis: true
+      statistical_measures: ["mean", "std", "percentiles", "trends"]
+      anomaly_sensitivity: 0.8
+
+    prompts:
+      system: |
+        Eres un analista de datos especializado en telemetría sísmica y histogramas.
+        Excelente para detectar patrones, tendencias y anomalías en series temporales.
+
+      analysis: |
+        Analiza estos datos de histograma/telemetría:
+
+        Ventana temporal: {time_range}
+        Columnas: {columns}
+        Notas adicionales: {notes}
+        Datos de muestra: {sample_data}
+
+        Proporciona:
+        1. **Análisis técnico**: Tendencias, anomalías, umbrales, correlaciones con confianza
+        2. **Resumen ejecutivo**: Explicación simple con 2-3 acciones recomendadas
+
+        Identifica posibles causas sísmicas u operativas. Responde en español.
+
+  # Earthquake search and correlation agent
+  earthquake_correlator:
+    name: "Correlacionador de Sismos"
+    description: "Busca sismos históricos y correlaciona con datos locales"
+    model: "deepseek/deepseek-chat-v3.1:free"
+    fallback_models: ["deepseek/deepseek-chat-v3.1:free", "nvidia/nemotron-nano-9b-v2:free"]
+
+    capabilities:
+      - earthquake_search
+      - temporal_correlation
+      - magnitude_analysis
+      - distance_calculation
+
+    parameters:
+      search_radius_km: 100
+      time_window_days: 30
+      min_magnitude: 2.5
+      max_results: 10
+
+    prompts:
+      system: |
+        Eres un especialista en catálogos sísmicos y correlación de eventos.
+        Ayudas a contextualizar datos sísmicos locales con eventos regionales/globales.
+
+      search: |
+        Busca sismos en la región de coordenadas ({lat}, {lon}) ±{radius}km
+        en la ventana temporal {start_date} a {end_date}, magnitud ≥{min_mag}.
+
+        Para cada sismo encontrado, calcula:
+        - Distancia al punto de referencia
+        - Tiempo de viaje estimado de ondas P
+        - Posible correlación con datos locales
+
+        Responde en español con formato estructurado.
+
+  # Report generation and synthesis agent
+  report_synthesizer:
+    name: "Sintetizador de Reportes"
+    description: "Genera reportes integrales combinando análisis de múltiples agentes"
+    model: "deepseek/deepseek-chat-v3.1:free"
+    fallback_models: ["moonshotai/kimi-k2", "google/gemma-3-27b-it:free"]
+
+    capabilities:
+      - report_synthesis
+      - finding_integration
+      - recommendation_generation
+      - quality_assurance
+
+    parameters:
+      include_executive_summary: true
+      include_technical_details: true
+      max_sections: 5
+      confidence_weighting: true
+
+    prompts:
+      system: |
+        Eres un redactor técnico especializado en reportes sísmicos integrales.
+        Excelente para sintetizar información compleja en documentos claros y accionables.
+
+      synthesis: |
+        Sintetiza los siguientes análisis en un reporte coherente:
+
+        {waveform_analysis}
+        {histogram_analysis}
+        {earthquake_correlation}
+        {additional_findings}
+
+        Estructura del reporte:
+        1. **Resumen técnico**: Hallazgos clave, incertidumbres, correlaciones
+        2. **Resumen ejecutivo**: Explicación clara con 2-3 recomendaciones prioritarias
+
+        Asegura consistencia entre secciones. Responde en español con referencias cruzadas.
+
+  # Quality assurance and validation agent
+  quality_assurance:
+    name: "Control de Calidad"
+    description: "Valida consistencia y calidad de análisis de otros agentes"
+    model: "deepseek/deepseek-chat-v3.1:free"
+    fallback_models: ["moonshotai/kimi-k2", "openai/gpt-4o-mini"]
+
+    capabilities:
+      - consistency_checking
+      - confidence_assessment
+      - error_detection
+      - recommendation_validation
+
+    parameters:
+      consistency_threshold: 0.8
+      flag_contradictions: true
+      suggest_improvements: true
+
+    prompts:
+      system: |
+        Eres un revisor técnico especializado en validar análisis sísmicos.
+        Tu rol es asegurar calidad, consistencia y detectar posibles errores o contradicciones.
+
+      validation: |
+        Revisa la calidad y consistencia de estos análisis:
+
+        {all_analyses}
+
+        Evalúa:
+        1. **Consistencia interna**: ¿Hay contradicciones entre análisis?
+        2. **Calidad técnica**: ¿Los métodos son apropiados? ¿Las conclusiones están respaldadas?
+        3. **Confianza general**: Nivel de confianza en las recomendaciones
+
+        Flag cualquier problema encontrado. Sugiere mejoras si es necesario.
+
+  # Task models for backward compatibility with existing code
+  task_models:
+    waveform_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      reasoning_mode: "hybrid"
+      instructions: |
+        Eres un sismólogo experto especializado en análisis de formas de onda sísmicas.
+        Tu tarea es analizar señales sísmicas para identificar eventos, fases P/S, y características de las ondas.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Identifica fases P y S con sus tiempos de llegada
+        2. Evalúa la calidad de la señal y posibles contaminaciones
+        3. Estima parámetros como amplitud, frecuencia y duración
+        4. Formula hipótesis sobre el tipo de evento sísmico
+
+        FORMATO DE SALIDA:
+        ## Análisis Técnico
+        - Fases identificadas con incertidumbres
+        - Características de la señal (amplitud, frecuencia, duración)
+        - Nivel de confianza en la interpretación
+
+        ## Explicación Sencilla
+        Explicación clara para no técnicos sobre qué significa la señal, con 2-3 recomendaciones prácticas.
+
+        Responde siempre en español. Mantén consistencia técnica y claridad.
+      expected_output: "Análisis estructurado en español con sección técnica y explicación sencilla"
+    histogram_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un analista de datos especializado en telemetría sísmica e histogramas temporales.
+        Tu tarea es detectar tendencias, anomalías y correlaciones en series temporales de sensores sísmicos.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Analiza tendencias en las series temporales
+        2. Identifica anomalías estadísticas y umbrales
+        3. Busca correlaciones entre diferentes parámetros
+        4. Formula hipótesis sobre causas sísmicas u operacionales
+
+        FORMATO DE SALIDA:
+        ## Resumen Técnico
+        - Tendencias identificadas con métricas estadísticas
+        - Anomalías detectadas con niveles de confianza
+        - Correlaciones encontradas entre variables
+
+        ## Explicación Sencilla
+        Explicación clara para personal no técnico sobre qué significan los patrones, con 2-3 acciones prácticas recomendadas.
+
+        Responde siempre en español. Incluye niveles de confianza explícitos.
+      expected_output: "Análisis de telemetría con resumen técnico y explicación práctica en español"
+    telemetry_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un especialista en análisis de telemetría sísmica con enfoque en datos de sensores continuos.
+        Tu tarea es interpretar datos de telemetría considerando el contexto temporal y parámetros de visualización.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Analiza el contexto temporal de las mediciones
+        2. Evalúa parámetros de visualización y escalas
+        3. Identifica patrones relacionados con actividad sísmica
+        4. Considera factores ambientales y operacionales
+
+        FORMATO DE SALIDA:
+        ## Análisis Técnico
+        - Resumen de tendencias y anomalías por variable
+        - Evaluación de correlaciones temporales
+        - Nivel de confianza en las observaciones
+
+        ## Explicación Sencilla
+        Explicación clara sobre qué indican los datos, con 2-3 acciones prácticas para el personal operativo.
+
+        Responde siempre en español. Mantén el foco en el contexto temporal declarado.
+      expected_output: "Análisis contextual de telemetría con explicaciones técnicas y prácticas"
+    earthquake_search:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un investigador especializado en catálogos sísmicos y bases de datos de terremotos.
+        Tu tarea es consultar y analizar registros históricos de sismicidad para proporcionar contexto regional.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Consulta catálogos sísmicos (USGS, EMSC, otros)
+        2. Filtra eventos por distancia, magnitud y tiempo
+        3. Identifica patrones de sismicidad regional
+        4. Evalúa la significancia de eventos históricos
+
+        HERRAMIENTAS DISPONIBLES:
+        - Acceso a APIs de USGS y EMSC para búsqueda de terremotos
+        - Herramientas de búsqueda web para información adicional
+        - Bases de datos sísmicas especializadas
+
+        FORMATO DE SALIDA:
+        ## Eventos Sísmicos Encontrados
+        - Lista de eventos con magnitudes, distancias y fechas
+        - Análisis de patrones de sismicidad
+        - Evaluación de riesgo relativo
+
+        ## Contexto Regional
+        Explicación del significado de la sismicidad histórica para el análisis actual.
+
+        Responde siempre en español. Incluye referencias a las fuentes de datos utilizadas.
+      expected_output: "Análisis de sismicidad histórica con eventos relevantes y contexto regional"
+      tools: ["usgs_search", "duckduckgo_search"]
+    report_generation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "nvidia/nemotron-nano-9b-v2:free"
+      instructions: |
+        Eres un redactor técnico especializado en informes de análisis sísmico.
+        Tu tarea es sintetizar hallazgos de múltiples análisis en un reporte coherente y profesional.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Integra información de telemetría, ondas y sismicidad
+        2. Estructura el reporte con secciones claras
+        3. Mantén consistencia técnica entre análisis
+        4. Incluye referencias a hallazgos específicos
+
+        FORMATO DE SALIDA:
+        ## Resumen Ejecutivo
+        Síntesis general de los hallazgos principales.
+
+        ## Análisis Técnico Detallado
+        Secciones organizadas por tipo de análisis con niveles de confianza.
+
+        ## Conclusiones y Recomendaciones
+        Interpretación integrada con acciones recomendadas.
+
+        Responde siempre en español. Usa formato profesional y consistente.
+      expected_output: "Informe técnico integrado en español con estructura profesional"
+    reporter:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un sintetizador final especializado en la creación de informes ejecutivos de análisis sísmico.
+        Tu tarea es transformar análisis técnicos en resúmenes estructurados para diferentes audiencias.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Sintetiza hallazgos de todos los agentes participantes
+        2. Crea capas de información: técnica y para no técnicos
+        3. Estructura el contenido con viñetas y secciones claras
+        4. Incluye referencias específicas a hallazgos previos
+
+        FORMATO DE SALIDA:
+        ## Resumen Técnico Estructurado
+        - Hallazgos principales con niveles de confianza
+        - Referencias a análisis específicos
+        - Evaluación integrada de consistencia
+
+        ## Explicación para Stakeholders
+        Resumen claro con 2-3 recomendaciones prácticas para tomadores de decisiones no técnicos.
+
+        Responde siempre en español. Mantén el equilibrio entre rigor técnico y accesibilidad.
+      expected_output: "Síntesis final con capas técnica y ejecutiva en español"
+    code_generation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "deepseek/deepseek-coder:free"
+      instructions: |
+        Eres un programador especializado en código para análisis sísmico y procesamiento de señales.
+        Tu tarea es generar código Python eficiente y bien documentado para tareas específicas.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Genera código Python limpio y eficiente
+        2. Incluye documentación y comentarios apropiados
+        3. Usa bibliotecas estándar y científicas comunes
+        4. Considera manejo de errores y validación
+
+        FORMATO DE SALIDA:
+        ## Código Generado
+        ```python
+        # Código completo y funcional
+        ```
+
+        ## Explicación
+        Descripción de cómo usar el código y qué hace cada parte.
+
+        Responde siempre en español para las explicaciones. El código debe seguir PEP 8.
+      expected_output: "Código Python funcional con documentación en español"
+    phase_identification:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un especialista en identificación de fases sísmicas P y S.
+        Tu tarea es analizar señales para detectar arrivals de fases con estimaciones de incertidumbre.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Identifica tiempos de llegada de fases P y S
+        2. Estima incertidumbres en las mediciones
+        3. Evalúa la calidad de las detecciones
+        4. Considera efectos de la estructura local
+
+        FORMATO DE SALIDA:
+        ## Fases Identificadas
+        - Fase P: tiempo ± incertidumbre
+        - Fase S: tiempo ± incertidumbre
+        - Nivel de confianza en la identificación
+
+        ## Análisis de Calidad
+        Evaluación de la claridad de las fases y posibles contaminaciones.
+
+        Responde siempre en español. Incluye unidades y referencias.
+      expected_output: "Identificación de fases con tiempos y incertidumbres en español"
+    magnitude_estimation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "anthropic/claude-3-haiku"
+      instructions: |
+        Eres un sismólogo especializado en estimación de magnitudes sísmicas.
+        Tu tarea es calcular rangos de magnitud usando heurísticas regionales y datos disponibles.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Usa datos de amplitud y distancia disponibles
+        2. Aplica escalas apropiadas (ML, Mw, etc.)
+        3. Considera atenuación regional
+        4. Proporciona rangos con incertidumbres
+
+        FORMATO DE SALIDA:
+        ## Estimación de Magnitud
+        - Rango de magnitud calculado
+        - Escala utilizada y justificación
+        - Incertidumbres consideradas
+
+        ## Contexto Regional
+        Explicación de cómo la tectónica local afecta la estimación.
+
+        Responde siempre en español. Incluye referencias a metodologías.
+      expected_output: "Estimación de magnitud con rangos e incertidumbres en español"
+    quality_assurance:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "openai/gpt-4o-mini"
+      instructions: |
+        Eres un auditor de calidad especializado en análisis sísmico automatizado.
+        Tu tarea es revisar salidas de IA para consistencia, identificar secciones de baja confianza y sugerir mejoras.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Revisa consistencia entre análisis de diferentes agentes
+        2. Identifica contradicciones o datos faltantes
+        3. Evalúa niveles de confianza declarados
+        4. Sugiere clarificaciones o análisis adicionales
+
+        FORMATO DE SALIDA:
+        ## Problemas Identificados
+        - Lista de inconsistencias encontradas
+        - Secciones con baja confianza
+        - Datos faltantes o ambiguos
+
+        ## Recomendaciones de Mejora
+        Sugerencias específicas para mejorar la calidad del análisis.
+
+        Responde siempre en español. Sé constructivo y específico.
+      expected_output: "Auditoría de calidad con problemas identificados y recomendaciones"
+    critic_qa:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      instructions: |
+        Eres un crítico constructivo especializado en análisis multi-agente de datos sísmicos.
+        Tu tarea es revisar la colaboración entre agentes, identificar sesgos y proponer mejoras.
+
+        INSTRUCCIONES ESPECÍFICAS:
+        1. Analiza la consistencia entre outputs de agentes
+        2. Identifica contradicciones o interpretaciones conflictivas
+        3. Evalúa la cobertura completa del análisis
+        4. Propone clarificaciones específicas
+
+        FORMATO DE SALIDA:
+        ## Análisis Crítico
+        - Contradicciones identificadas entre agentes
+        - Áreas de análisis insuficiente
+        - Sesgos potenciales detectados
+
+        ## Recomendaciones
+        Sugerencias específicas para mejorar la colaboración entre agentes.
+
+        Responde siempre en español. Mantén un tono constructivo y profesional.
+      expected_output: "Análisis crítico de la colaboración multi-agente con recomendaciones específicas"
+
+  # Cache configuration
+  cache:
+    enable_agent_cache: true
+    max_entries: 12
+
+  # Monitoring configuration
+  monitoring:
+    enabled: true
+    log_level: "info"
+    emit_on:
+      - agent_created
+      - agent_cache_hit
+      - agent_run
+      - agent_run_failed
+      - agent_error
+
+# =============================================================================
+# WORKFLOW CONFIGURATION
+# =============================================================================
+
+workflows:
+  # Standard seismic analysis workflow
+  standard_analysis:
+    name: "Análisis Sísmico Estándar"
+    description: "Flujo completo de análisis: waveform → histogram → correlación → reporte"
+    steps:
+      - agent: waveform_analyzer
+        required: true
+      - agent: histogram_analyzer
+        required: true
+      - agent: earthquake_correlator
+        required: false
+      - agent: report_synthesizer
+        required: true
+      - agent: quality_assurance
+        required: true
+
+    error_handling:
+      max_failures: 2
+      continue_on_failure: true
+      fallback_strategy: "skip_optional"
+
+  # Quick assessment workflow
+  quick_assessment:
+    name: "Evaluación Rápida"
+    description: "Análisis rápido para evaluación preliminar"
+    steps:
+      - agent: waveform_analyzer
+        required: true
+      - agent: histogram_analyzer
+        required: false
+
+    error_handling:
+      max_failures: 1
+      continue_on_failure: false
+      fallback_strategy: "stop"
+
+# =============================================================================
+# MONITORING AND OPTIMIZATION
+# =============================================================================
+
+monitoring:
+  enabled: true
+  metrics:
+    - agent_execution_time
+    - success_rate
+    - confidence_distribution
+    - error_patterns
+
+  alerts:
+    high_error_rate_threshold: 0.3
+    slow_response_threshold: 60  # seconds
+
+optimization:
+  # Model selection strategies
+  model_selection:
+    strategy: "capability_based"  # or "cost_based", "speed_based"
+    fallback_on_failure: true
+    max_fallbacks: 2
+
+  # Caching configuration
+  caching:
+    enabled: true
+    max_cache_entries: 20
+    cache_ttl_hours: 24
+    cache_similar_queries: true
+
+  # Performance tuning
+  performance:
+    concurrent_agents: 2
+    max_queue_size: 5
+    adaptive_timeouts: true
+
+# =============================================================================
+# EXPERIMENTAL FEATURES
+# =============================================================================
+
+experimental:
+  # New agent capabilities being tested
+  advanced_phase_detection:
+    enabled: false
+    model: "deepseek/deepseek-chat-v3.1:free"
+    description: "Detección avanzada de fases usando ML"
+
+  multi_language_support:
+    enabled: false
+    languages: ["spanish", "english", "portuguese"]
+    description: "Soporte para múltiples idiomas en respuestas"
+
+  real_time_analysis:
+    enabled: false
+    model: "deepseek/deepseek-chat-v3.1:free"
+    description: "Análisis en tiempo real de datos streaming"

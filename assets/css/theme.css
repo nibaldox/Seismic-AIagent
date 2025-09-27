@@ -1,0 +1,20 @@
+:root {
+  --primary-color: #FF6B35;
+  --secondary-bg: #F0F2F6;
+  --text-color: #262730;
+}
+
+/* Custom styles will be loaded via streamlit components */
+
+.waveform-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+
+.waveform-card .stMetric {
+  padding: 0.25rem 0.5rem;
+}

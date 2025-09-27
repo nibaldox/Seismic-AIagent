@@ -1,0 +1,123 @@
+seismic_interpreter:
+  default_model:
+    provider: "openrouter"
+    id: "deepseek/deepseek-chat-v3.1:free"
+    name: "DeepSeek Chat v3.1"
+    cost_per_token: 0.0
+    context_length: 131072
+    total_parameters: "671B"
+    active_parameters: "671B"
+    capabilities:
+      - advanced_reasoning
+      - multilingual
+      - scientific_analysis
+      - code_generation
+      - tool_use
+  model_justification: |
+    Using deepseek/deepseek-chat-v3.1:free via OpenRouter as the default provides excellent
+    reasoning capabilities for our seismic analysis tasks, with nvidia/nemotron-nano-9b-v2:free
+    as a reliable secondary alternative.
+  models:
+    openrouter:
+      enabled: true
+      api_key: "${OPENROUTER_API_KEY}"
+      models:
+        primary: "deepseek/deepseek-chat-v3.1:free"
+        alternative1: "nvidia/nemotron-nano-9b-v2:free"
+        alternative2: "google/gemma-3-27b-it:free"
+        premium_analysis: "anthropic/claude-3.5-sonnet"
+        premium_reports: "openai/gpt-4o"
+        fast_search: "anthropic/claude-3-haiku"
+        coding: "deepseek/deepseek-coder:free"
+      pricing_limits:
+        session_limit: 0.5
+        daily_limit: 2.0
+        warning_at: 0.8
+    ollama:
+      enabled: true
+      host: "${OLLAMA_HOST}"
+      models:
+        primary: "llama3.2"
+        analysis: "mistral"
+        search: "gemma2:2b"
+        coding: "codellama"
+    openai:
+      enabled: true
+      api_key: "${OPENAI_API_KEY}"
+      models:
+        fallback: "gpt-4o-mini"
+  model_selection:
+    strategy: "advanced_free_first"
+    selection_order:
+      - "deepseek/deepseek-chat-v3.1:free"
+      - "nvidia/nemotron-nano-9b-v2:free"
+      - "google/gemma-3-27b-it:free"
+      - "deepseek/deepseek-r1-distill-llama-70b:free"
+      - "ollama/llama3.2"
+      - "anthropic/claude-3-haiku"
+      - "openai/gpt-4o-mini"
+    auto_switch: true
+  task_models:
+    waveform_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      reasoning_mode: "hybrid"
+    histogram_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      notes: "Analyze Gecko histogram/telemetry time series: trends, anomalies, thresholds, and possible seismic/operational causes. Output must have two layers: (1) Technical summary (confidence, thresholds, correlations). (2) Plain-language explanation for non-technical staff with 2-3 actionable recommendations. Answer in Spanish."
+    telemetry_analysis:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      notes: "Focus on telemetry/histograms with declared time window, TZ and visualization params. Output must include: (1) Technical bullet summary (trends, anomalies, correlations, hypotheses) with confidence. (2) A simple, jargon-free explanation and 2-3 practical actions. Answer in Spanish."
+    earthquake_search:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "nvidia/nemotron-nano-9b-v2:free"
+    report_generation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "nvidia/nemotron-nano-9b-v2:free"
+    reporter:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      notes: "Synthesize final Spanish report with two layers: (1) Technical structured summary (sections, bullet points, confidence, references to findings). (2) Plain-language summary with 2-3 actionable recommendations for non-technical stakeholders."
+    code_generation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "deepseek/deepseek-coder:free"
+    phase_identification:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "nvidia/nemotron-nano-9b-v2:free"
+      notes: "Focus on P/S phase detection with uncertainty estimates."
+    magnitude_estimation:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "anthropic/claude-3-haiku"
+      notes: "Estimate moment magnitude range using regional heuristics."
+    quality_assurance:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      fallback: "openai/gpt-4o-mini"
+      notes: "Audit AI outputs for consistency and flag low-confidence sections."
+    critic_qa:
+      preferred: "deepseek/deepseek-chat-v3.1:free"
+      notes: "Critically check consistency across agents; flag contradictions; request clarifications."
+  prompt_optimization:
+    qwen3_235b: 
+      advanced_reasoning: "Leverage advanced reasoning capabilities for complex seismic analysis."
+      multilingual: "Use multilingual capabilities for Spanish responses."
+      scientific_analysis: "Apply scientific reasoning for seismic data analysis."
+      code_generation: "Use code generation capabilities when needed."
+      tool_use: "Leverage tool-calling for contextual data."
+  search_parameters:
+    default_radius_km: 100
+    max_radius_km: 500
+    default_time_window_days: 30
+    max_time_window_days: 90
+  confidence_thresholds:
+    high_confidence: 0.8
+    medium_confidence: 0.6
+    low_confidence: 0.3
+  cache:
+    enable_agent_cache: true
+    max_entries: 12
+  monitoring:
+    enabled: true
+    log_level: "info"
+    emit_on:
+      - agent_created
+      - agent_cache_hit
+      - agent_run
+      - agent_run_failed
