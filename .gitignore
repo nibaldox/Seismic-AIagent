@@ -155,6 +155,11 @@ data/**/*.bin
 data/**/*.hdf5
 data/**/*.nc
 data/**/*.nc4
+# Seismic data files (.ms and .ss files)
+data/**/*.ms
+data/**/*.ss
+*.ms
+*.ss
 
 # Temporary files
 tmp/
