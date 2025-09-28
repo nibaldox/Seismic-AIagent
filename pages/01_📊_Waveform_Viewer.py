@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 import streamlit as st
+from pydantic import ValidationError
 
 from src.core.data_reader import DataReader
 from src.streamlit_utils.file_uploader import seismic_file_uploader
@@ -23,12 +24,11 @@ from src.streamlit_utils.session_state import (
 )
 from src.streamlit_utils.sidebar_controls import render_waveform_sidebar
 from src.visualization.waveform_plots import create_waveform_plot
-from src.core.picking import suggest_picks_sta_lta, Pick, PickManager
 from src.streamlit_utils.session_state import add_pick, list_picks, clear_picks
-from src.core.magnitude import (
-    estimate_local_magnitude,  # placeholder (mantener compatibilidad)
-    estimate_local_magnitude_wa,
-)
+from src.services import PickPayload, WaveformAnalysisService
+
+
+waveform_service = WaveformAnalysisService()
 
 
 def _extract_traces(stream_container: Any) -> Iterable[Any]:
@@ -145,68 +145,87 @@ def main() -> None:
             suggest = cols[3].button("Sugerir (STA/LTA)")
 
             if suggest and active_trace:
-                suggestions = suggest_picks_sta_lta(active_trace)
-                if not suggestions:
-                    st.info("Sin sugerencias STA/LTA.")
+                try:
+                    suggestions = waveform_service.suggest_picks(active_trace)
+                except Exception as exc:  # pragma: no cover - surfaced to user
+                    st.warning(f"No se pudieron generar sugerencias: {exc}")
                 else:
-                    st.markdown("**Sugerencias (candidatos P?):**")
-                    for s in suggestions:
-                        c1, c2, c3 = st.columns([2,2,1])
-                        c1.write(f"t = {s['time_rel']:.2f}s")
-                        c2.write(f"score = {s['score']:.2f}")
-                        if c3.button("+ Pick", key=f"pick_sugg_{s['time_rel']}"):
-                            stats = getattr(active_trace, 'stats', None)
-                            add_pick(
-                                phase='P',
-                                time_rel=float(s['time_rel']),
-                                station=getattr(stats, 'station', 'UNK'),
-                                channel=getattr(stats, 'channel', 'CH'),
-                                session=session,
-                            )
-                            st.rerun()
+                    if not suggestions:
+                        st.info("Sin sugerencias STA/LTA.")
+                    else:
+                        st.markdown("**Sugerencias (candidatos P?):**")
+                        for suggestion in suggestions:
+                            c1, c2, c3 = st.columns([2, 2, 1])
+                            c1.write(f"t = {suggestion.time_rel:.2f}s")
+                            c2.write(f"score = {suggestion.score:.2f}")
+                            if c3.button("+ Pick", key=f"pick_sugg_{suggestion.time_rel}"):
+                                stats = getattr(active_trace, "stats", None)
+                                add_pick(
+                                    phase="P",
+                                    time_rel=float(suggestion.time_rel),
+                                    station=getattr(stats, "station", "UNK"),
+                                    channel=getattr(stats, "channel", "CH"),
+                                    method=suggestion.method,
+                                    session=session,
+                                )
+                                st.rerun()
 
             current_picks = list_picks(session=session)
             if current_picks:
                 st.markdown("**Picks actuales:**")
                 for i, p in enumerate(current_picks):
                     st.write(f"{i+1}. {p['phase']} | {p['station']}.{p['channel']} | t={p['time_rel']:.2f}s ({p['method']})")
-                # If we have at least one P and one S for active trace station, attempt ML
+
                 if active_trace is not None:
-                    stats_active = getattr(active_trace, 'stats', None)
-                    st_station = getattr(stats_active, 'station', 'UNK')
-                    sr = float(getattr(stats_active, 'sampling_rate', 0) or 0)
-                    if sr > 0:
-                        import numpy as np
-                        # Nuevo cálculo preliminar con aproximación Wood-Anderson
-                        ml_result_wa = estimate_local_magnitude_wa(
-                            picks=current_picks,
-                            trace_data=np.asarray(active_trace.data),
-                            trace_sampling_rate=sr,
-                            station=st_station,
-                        )
-                        if ml_result_wa.ml is not None:
-                            st.success(
-                                f"ML (WA aprox) {ml_result_wa.ml:.2f} · ΔP-S {ml_result_wa.delta_ps:.2f}s · Dist~{ml_result_wa.distance_km:.1f} km"
+                    try:
+                        pick_payloads = [PickPayload(**p) for p in current_picks]
+                    except ValidationError as exc:
+                        st.error(f"Error validando picks: {exc}")
+                    else:
+                        try:
+                            ml_result_wa = waveform_service.estimate_magnitude_wood_anderson(
+                                picks=pick_payloads,
+                                trace=active_trace,
                             )
-                            if ml_result_wa.warnings:
-                                with st.expander("Detalles ML / Advertencias"):
-                                    for w in ml_result_wa.warnings:
-                                        st.write(f"- {w}")
+                        except ValueError as exc:
+                            st.caption(f"ML (WA aprox) no disponible: {exc}")
                         else:
-                            st.caption(f"ML (WA aprox) no disponible: {ml_result_wa.notes}")
-                        # Versión placeholder para comparar (opcional)
-                        with st.expander("Comparar con versión placeholder (no rigurosa)"):
-                            ml_old = estimate_local_magnitude(
-                                picks=current_picks,
-                                trace_data=np.asarray(active_trace.data),
-                                trace_sampling_rate=sr,
-                                station=st_station,
-                            )
-                            if ml_old.ml is not None:
-                                st.write(f"ML placeholder: {ml_old.ml:.2f} (NO usar para análisis)")
+                            if ml_result_wa.ml is not None:
+                                delta_ps = f"{ml_result_wa.delta_ps:.2f}s" if ml_result_wa.delta_ps is not None else "—"
+                                distance = (
+                                    f"{ml_result_wa.distance_km:.1f} km"
+                                    if ml_result_wa.distance_km is not None
+                                    else "—"
+                                )
+                                st.success(
+                                    f"ML (WA aprox) {ml_result_wa.ml:.2f} · ΔP-S {delta_ps} · Dist~{distance}"
+                                )
+                                if ml_result_wa.warnings:
+                                    with st.expander("Detalles ML / Advertencias"):
+                                        for warning in ml_result_wa.warnings:
+                                            st.write(f"- {warning}")
                             else:
-                                st.write(f"Placeholder no disponible: {ml_old.notes}")
-                        st.caption("ML mostrado es preliminar. Requiere respuesta instrumental y localización multi-estación para ser publicable.")
+                                st.caption(f"ML (WA aprox) no disponible: {ml_result_wa.notes}")
+
+                            with st.expander("Comparar con versión placeholder (no rigurosa)"):
+                                try:
+                                    ml_old = waveform_service.estimate_magnitude_placeholder(
+                                        picks=pick_payloads,
+                                        trace=active_trace,
+                                    )
+                                except ValueError as exc:
+                                    st.write(f"Placeholder no disponible: {exc}")
+                                else:
+                                    if ml_old.ml is not None:
+                                        st.write(
+                                            f"ML placeholder: {ml_old.ml:.2f} (NO usar para análisis)"
+                                        )
+                                    else:
+                                        st.write(f"Placeholder no disponible: {ml_old.notes}")
+
+                            st.caption(
+                                "ML mostrado es preliminar. Requiere respuesta instrumental y localización multi-estación para ser publicable."
+                            )
             else:
                 st.caption("No hay picks.")
 

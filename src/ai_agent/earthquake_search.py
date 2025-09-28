@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -31,7 +31,7 @@ class EarthquakeQuery:
         if self.start is not None and self.end is not None:
             starttime, endtime = self.start, self.end
         else:
-            endtime = datetime.utcnow()
+            endtime = datetime.now(timezone.utc)
             starttime = endtime - timedelta(days=self.days)
         return {
             "format": "geojson",
@@ -118,7 +118,11 @@ class EarthquakeSearcher:
         magnitude = properties.get("mag", "?")
         place = properties.get("place", "Unknown location")
         time = properties.get("time")
-        timestamp = datetime.utcfromtimestamp(time / 1000).isoformat() if time else "Unknown"
+        timestamp = (
+            datetime.fromtimestamp(time / 1000, tz=timezone.utc).isoformat()
+            if time
+            else "Unknown"
+        )
         return f"M{magnitude} – {place} at {timestamp} UTC"
 
     def summarize_results(self, results: Dict[str, List[Dict[str, Any]]]) -> str:

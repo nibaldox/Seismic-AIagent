@@ -456,11 +456,22 @@ def load_agent_suite(config_path: str = "agents_config.yaml") -> Dict[str, "Agno
     for task, data in task_models.items():
         provider, model_id = _resolve_task_model(seismic, data)
         default_instruction = f"Execute task: {task.replace('_', ' ')} for seismic interpretation."
-        instructions = data.get("instructions", default_instruction)
+        instructions_config = data.get("instructions")
+        if isinstance(instructions_config, (list, tuple)):
+            base_instruction = instructions_config[0] if instructions_config else default_instruction
+            extra_instructions = list(instructions_config[1:])
+        else:
+            base_instruction = instructions_config or default_instruction
+            extra_instructions: list[str] = []
+
         notes = data.get("notes")
-        if notes and not instructions:
-            # Fallback to notes if no specific instructions (for backward compatibility)
-            instructions = f"{instructions}\n\nGuidance: {notes}"
+        if notes and not instructions_config:
+            base_instruction = f"{base_instruction}\n\nGuidance: {notes}"
+
+        if extra_instructions:
+            instructions = "\n\n".join([base_instruction, *extra_instructions])
+        else:
+            instructions = base_instruction
         
         # Use expected_output from config if available, otherwise use default
         expected_output = data.get("expected_output", "Provide technical analysis with confidence levels and plain-language explanations in Spanish")
