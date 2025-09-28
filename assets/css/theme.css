@@ -18,3 +18,5 @@
 .waveform-card .stMetric {
   padding: 0.25rem 0.5rem;
 }
+
+/* Nota: estilos de densidad compacta se inyectan dinámicamente desde appearance.py */

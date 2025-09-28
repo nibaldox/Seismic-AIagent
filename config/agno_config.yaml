@@ -30,9 +30,10 @@ seismic_interpreter:
         fast_search: "anthropic/claude-3-haiku"
         coding: "deepseek/deepseek-coder:free"
       pricing_limits:
-        session_limit: 0.5
-        daily_limit: 2.0
-        warning_at: 0.8
+        session_limit: 0.5   # USD máximo por sesión (free por defecto)
+        daily_limit: 2.0     # USD máximo por día (free por defecto)
+        warning_at: 0.8      # Avisar si se supera el 80% del límite
+        latency_p95: 12.0    # Latencia máxima P95 aceptable (segundos)
     ollama:
       enabled: true
       host: "${OLLAMA_HOST}"
@@ -47,7 +48,7 @@ seismic_interpreter:
       models:
         fallback: "gpt-4o-mini"
   model_selection:
-    strategy: "advanced_free_first"
+    strategy: "advanced_free_first"  # Prioriza modelos gratuitos y auto-switch si hay error o límite
     selection_order:
       - "deepseek/deepseek-chat-v3.1:free"
       - "nvidia/nemotron-nano-9b-v2:free"

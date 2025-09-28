@@ -1,6 +1,18 @@
-"""Utilidades para manejar el estado de sesión de Streamlit."""
 
 from __future__ import annotations
+# --- Memoización/caché de arrays de traza ---
+def set_trace_cache(key: str, value: Any, session: Optional[SeismicSession] = None) -> None:
+    session = session or get_session()
+    session.metadata.setdefault("trace_cache", {})[key] = value
+
+def get_trace_cache(key: str, session: Optional[SeismicSession] = None) -> Any:
+    session = session or get_session()
+    return session.metadata.get("trace_cache", {}).get(key)
+
+def clear_trace_cache(session: Optional[SeismicSession] = None) -> None:
+    session = session or get_session()
+    session.metadata["trace_cache"] = {}
+"""Utilidades para manejar el estado de sesion de Streamlit."""
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Optional
@@ -18,7 +30,7 @@ class SeismicSession:
     ai_results: Dict[str, Any] = field(default_factory=dict)
     # Picks stored as list[dict]
     picks: List[Dict[str, Any]] = field(default_factory=list)
-    # Multiagente: contexto de telemetría/series para Equipo IA
+    # Multiagente: contexto de telemetria/series para Equipo IA
     team_context: Dict[str, Any] = field(default_factory=dict)
     # Histogramas: datos persistentes
     histogram_data: Optional[Any] = None  # DataFrame
@@ -50,7 +62,7 @@ def clear_picks(session: Optional[SeismicSession] = None) -> None:
 
 
 def get_session() -> SeismicSession:
-    """Obtiene (o crea) la instancia de sesión principal."""
+    """Obtiene (o crea) la instancia de sesion principal."""
 
     try:
         session = st.session_state.get("seismo_session")
@@ -68,7 +80,7 @@ def get_session() -> SeismicSession:
         return session
 
 
-# --- Helpers para Equipo IA / Telemetría ---
+# --- Helpers para Equipo IA / Telemetria ---
 def set_team_telemetry_context(*, time_range: str | None, columns: list[str] | None, df_head_md: str | None, notes: str | None, meta: Dict[str, Any] | None = None, filename: str | None = None) -> None:
     session = get_session()
     session.team_context["time_range"] = time_range
@@ -86,7 +98,7 @@ def get_team_context() -> Dict[str, Any]:
 
 
 def register_stream(*, stream: Any, name: str, summary: Optional[str] = None) -> SeismicSession:
-    """Registra un stream en el estado de sesión y lo marca como actual."""
+    """Registra un stream en el estado de sesion y lo marca como actual."""
 
     session = get_session()
     metadata = session.metadata
@@ -252,7 +264,7 @@ def _trace_label(trace: Any, idx: int) -> str:
 
 # --- Helpers para Histogramas ---
 def set_histogram_data(*, df: Any, meta: Dict[str, Any], filename: Optional[str] = None, session: Optional[SeismicSession] = None) -> None:
-    """Guarda los datos de histogramas en el estado de sesión."""
+    """Guarda los datos de histogramas en el estado de sesion."""
     session = session or get_session()
     session.histogram_data = df
     session.histogram_meta = meta
@@ -260,23 +272,23 @@ def set_histogram_data(*, df: Any, meta: Dict[str, Any], filename: Optional[str]
 
 
 def get_histogram_data(session: Optional[SeismicSession] = None) -> tuple[Optional[Any], Dict[str, Any], Optional[str]]:
-    """Recupera los datos de histogramas del estado de sesión."""
+    """Recupera los datos de histogramas del estado de sesion."""
     session = session or get_session()
     # Manejar sesiones existentes que no tienen los nuevos atributos
     try:
         return getattr(session, 'histogram_data', None), getattr(session, 'histogram_meta', {}), getattr(session, 'histogram_filename', None)
     except AttributeError:
-        # Si la sesión no tiene los atributos, devolver valores por defecto
+        # Si la sesion no tiene los atributos, devolver valores por defecto
         return None, {}, None
 
 
 def clear_histogram_data(session: Optional[SeismicSession] = None) -> None:
-    """Limpia los datos de histogramas del estado de sesión."""
+    """Limpia los datos de histogramas del estado de sesion."""
     session = session or get_session()
     try:
         session.histogram_data = None
         session.histogram_meta = {}
         session.histogram_filename = None
     except AttributeError:
-        # Si la sesión no tiene los atributos, no hacer nada
+        # Si la sesion no tiene los atributos, no hacer nada
         pass

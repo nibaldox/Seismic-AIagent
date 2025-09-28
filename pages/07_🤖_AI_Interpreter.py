@@ -6,6 +6,7 @@ import os
 from numbers import Number
 from pathlib import Path
 from typing import List
+from datetime import datetime, timedelta
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -15,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 
 from src.ai_agent.earthquake_search import EarthquakeQuery, EarthquakeSearcher
-from src.ai_agent.report_generator import build_report_agent, generate_markdown_report
+from src.ai_agent.report_generator import build_report_agent, generate_markdown_report, build_report_md
 from src.ai_agent.seismic_interpreter import load_agent_suite, run_primary_analysis
 from src.streamlit_utils.session_state import (
     get_current_stream_name,
@@ -28,6 +29,7 @@ from src.streamlit_utils.session_state import (
 )
 from src.utils.config import load_yaml
 from src.utils.logger import setup_logger
+from src.streamlit_utils.appearance import handle_error
 
 LOGGER = setup_logger(__name__)
 
@@ -76,8 +78,11 @@ def _build_trace_context(session, labels: List[str]) -> str:
         start = getattr(stats, "starttime", None)
 
         duration = None
-        if isinstance(npts, Number) and isinstance(delta, Number):
-            duration = npts * delta
+        try:
+            if isinstance(npts, Number) and isinstance(delta, Number):
+                duration = float(str(npts)) * float(str(delta))
+        except (ValueError, TypeError):
+            duration = None
 
         parts = [f"station={station}", f"channel={channel}"]
         if sampling_rate:
@@ -105,6 +110,39 @@ def _parse_float(value) -> float | None:
         return float(str(value).strip())
     except (TypeError, ValueError):
         return None
+
+
+def _extract_waveform_date_range(session) -> tuple[datetime | None, datetime | None]:
+    """Extrae el rango de fechas de los datos de waveform cargados."""
+    try:
+        from src.streamlit_utils.session_state import get_current_stream
+        current_stream = get_current_stream(session)
+        if not current_stream:
+            return None, None
+        
+        start_times = []
+        end_times = []
+        
+        for trace in current_stream:
+            stats = getattr(trace, "stats", None)
+            if not stats:
+                continue
+            
+            start_time = getattr(stats, "starttime", None)
+            end_time = getattr(stats, "endtime", None)
+            
+            if start_time:
+                start_times.append(start_time.datetime)
+            if end_time:
+                end_times.append(end_time.datetime)
+        
+        if start_times and end_times:
+            return min(start_times), max(end_times)
+        
+    except Exception:
+        pass
+    
+    return None, None
 
 
 def _kelunji_coordinates(session) -> tuple[float | None, float | None, float | None]:
@@ -171,8 +209,12 @@ def main() -> None:
     if st.button("🚀 Run AI Interpretation", disabled=not selected_labels):
         prompt_summary = _build_trace_context(session, selected_labels)
         with st.spinner("Running AI agents..."):
-            analysis = run_primary_analysis(agents, prompt_summary)
-            session.ai_results["analysis"] = analysis
+            try:
+                analysis = run_primary_analysis(agents, prompt_summary)
+                session.ai_results["analysis"] = analysis
+            except Exception as exc:
+                handle_error(exc, context="Error en análisis IA")
+                analysis = None
         if not analysis:
             st.warning("AI analysis not available. Check agent configuration.")
 
@@ -180,6 +222,26 @@ def main() -> None:
         st.markdown(session.ai_results["analysis"])
 
     st.subheader("Earthquake Context")
+
+    # Extraer rango de fechas de los waveforms
+    waveform_start, waveform_end = _extract_waveform_date_range(session)
+    if waveform_start and waveform_end:
+        st.info(f"📅 Datos sísmicos: {waveform_start.strftime('%Y-%m-%d %H:%M')} → {waveform_end.strftime('%Y-%m-%d %H:%M')} UTC")
+        # Calcular ventana de búsqueda alrededor de los datos
+        search_days_before = st.slider(
+            "Días antes de los datos", 
+            min_value=1, max_value=30, value=7,
+            help="Buscar eventos X días antes del inicio de los datos"
+        )
+        search_days_after = st.slider(
+            "Días después de los datos", 
+            min_value=1, max_value=30, value=7,
+            help="Buscar eventos X días después del final de los datos"
+        )
+    else:
+        st.warning("⚠️ No se pudo extraer fecha de los waveforms, usando fecha actual")
+        search_days_before = 7
+        search_days_after = 7
 
     kelunji_lat, kelunji_lon, kelunji_alt = _kelunji_coordinates(session)
     stored_lat = session.metadata.get("earthquake_search_lat") if session else None
@@ -227,47 +289,86 @@ def main() -> None:
     session.metadata["earthquake_search_radius_km"] = radius
 
     if st.button("🔍 Fetch Nearby Events"):
-        searcher = EarthquakeSearcher(
-            os.getenv("USGS_API_URL", "https://earthquake.usgs.gov/fdsnws/event/1/"),
-            os.getenv("EMSC_API_URL", "https://www.seismicportal.eu/fdsnws/event/1/"),
-        )
-        query = EarthquakeQuery(latitude=lat, longitude=lon, radius_km=radius)
-        results = searcher.search_all(query)
-        summary = searcher.summarize_results(results)
-        session.ai_results["earthquakes"] = summary
-        st.markdown(summary)
+        try:
+            searcher = EarthquakeSearcher(
+                os.getenv("USGS_API_URL", "https://earthquake.usgs.gov/fdsnws/event/1/"),
+                os.getenv("EMSC_API_URL", "https://www.seismicportal.eu/fdsnws/event/1/"),
+            )
+            
+            # Usar fechas de waveforms si están disponibles
+            if waveform_start and waveform_end:
+                query_start = waveform_start - timedelta(days=search_days_before)
+                query_end = waveform_end + timedelta(days=search_days_after)
+                query = EarthquakeQuery(
+                    latitude=lat, 
+                    longitude=lon, 
+                    radius_km=radius,
+                    start=query_start,
+                    end=query_end
+                )
+                st.info(f"Búsqueda: {query_start.strftime('%Y-%m-%d')} → {query_end.strftime('%Y-%m-%d')}")
+            else:
+                # Fallback: usar fecha actual con ventana estándar
+                query = EarthquakeQuery(latitude=lat, longitude=lon, radius_km=radius)
+                st.info("Búsqueda: últimos 30 días desde fecha actual")
+            
+            results = searcher.search_all(query)
+            summary = searcher.summarize_results(results)
+            session.ai_results["earthquakes"] = summary
+            st.markdown(summary)
+        except Exception as exc:
+            handle_error(exc, context="Error al buscar eventos sísmicos")
     elif session.ai_results.get("earthquakes"):
         st.markdown(session.ai_results["earthquakes"])
 
     st.subheader("Automated Report")
-    if st.button("📝 Generate Report", disabled=not session.ai_results.get("analysis")):
-        default_model = config.get("default_model", {})
-        report_agent = build_report_agent(
-            default_model.get("provider", "openrouter"),
-            default_model.get("id", "deepseek/deepseek-chat-v3.1:free"),
-        )
-        report = generate_markdown_report(
-            report_agent,
-            waveform_summary=session.stream_summary,
-            ai_analysis=session.ai_results.get("analysis"),
-            earthquake_context=session.ai_results.get("earthquakes"),
-        )
-        session.ai_results["report"] = report
-        st.download_button(
-            "⬇️ Download Markdown",
-            data=report,
-            file_name="seismic_report.md",
-            mime="text/markdown",
-        )
-        st.markdown(report)
-    elif session.ai_results.get("report"):
-        st.download_button(
-            "⬇️ Download Markdown",
-            data=session.ai_results["report"],
-            file_name="seismic_report.md",
-            mime="text/markdown",
-        )
-        st.markdown(session.ai_results["report"])
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        if st.button("📝 Generate Report IA", disabled=not session.ai_results.get("analysis")):
+            try:
+                default_model = config.get("default_model", {})
+                report_agent = build_report_agent(
+                    default_model.get("provider", "openrouter"),
+                    default_model.get("id", "deepseek/deepseek-chat-v3.1:free"),
+                )
+                report = generate_markdown_report(
+                    report_agent,
+                    waveform_summary=session.stream_summary,
+                    ai_analysis=session.ai_results.get("analysis"),
+                    earthquake_context=session.ai_results.get("earthquakes"),
+                )
+                session.ai_results["report"] = report
+                st.download_button(
+                    "⬇️ Download Markdown IA",
+                    data=report,
+                    file_name="seismic_report.md",
+                    mime="text/markdown",
+                )
+                st.markdown(report)
+            except Exception as exc:
+                handle_error(exc, context="Error al generar reporte IA")
+        elif session.ai_results.get("report"):
+            st.download_button(
+                "⬇️ Download Markdown IA",
+                data=session.ai_results["report"],
+                file_name="seismic_report.md",
+                mime="text/markdown",
+            )
+            st.markdown(session.ai_results["report"])
+    with col2:
+        if st.button("📝 Exportar Reporte Institucional", disabled=not session.ai_results.get("analysis")):
+            report_md = build_report_md(
+                waveform_summary=session.stream_summary or "",
+                ai_analysis=session.ai_results.get("analysis") or "",
+                earthquake_context=session.ai_results.get("earthquakes") or "",
+            )
+            st.download_button(
+                "⬇️ Descargar Reporte Institucional",
+                data=report_md,
+                file_name="reporte_institucional.md",
+                mime="text/markdown",
+            )
+            st.markdown(report_md)
 
 
 if __name__ == "__main__":  # pragma: no cover

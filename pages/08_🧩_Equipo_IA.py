@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 from src.ai_agent.seismic_interpreter import load_agent_suite, run_team_analysis
+from src.streamlit_utils.appearance import handle_error
 from src.streamlit_utils.session_state import get_team_context, get_session
 
 # Load environment variables
@@ -113,6 +114,7 @@ def main() -> None:
         obs_csv = st.text_area("Pegue observaciones", key="observations")
 
     if st.button("🚀 Ejecutar equipo"):
+        import time
         agents = load_agent_suite()
 
         # Build context
@@ -179,11 +181,22 @@ def main() -> None:
         progress_placeholder = st.empty()
         streaming_placeholder = st.empty()
 
+        # --- Instrumentar tiempo de ejecución IA ---
+        t0 = time.time()
         with st.spinner("Inicializando equipo de análisis sísmico..."):
             status_placeholder.info("🚀 Iniciando análisis coordinado del equipo IA")
 
             try:
                 result = run_team_analysis(agents, context=context)
+                t1 = time.time()
+                ia_duration = t1 - t0
+                session.metadata["team_ia_metrics"] = {
+                    "start": t0,
+                    "end": t1,
+                    "duration": ia_duration,
+                    "agent_count": result.get("agent_count", None),
+                    "team_mode": result.get("team_mode", "secuencial"),
+                }
 
                 # Clear status
                 status_placeholder.empty()
@@ -229,10 +242,18 @@ def main() -> None:
                 duration = result.get("duration", 0)
                 st.success(f"✅ Análisis completado en modo {team_mode} ({duration:.2f}s)")
 
-            except Exception as e:
-                status_placeholder.error(f"❌ Error en análisis del equipo: {str(e)}")
+            except Exception as exc:
+                handle_error(exc, context="Error en análisis del equipo IA")
+                status_placeholder.error(f"❌ Error en análisis del equipo: {str(exc)}")
                 st.error("El sistema ha hecho fallback a modo secuencial. Revisa los logs para más detalles.")
-                st.exception(e)
+
+        # --- Panel de métricas IA ---
+        ia_metrics = session.metadata.get("team_ia_metrics", {})
+        if ia_metrics:
+            with st.expander("📈 Métricas de IA (Equipo)"):
+                st.metric("Duración total IA (s)", f"{ia_metrics.get('duration', 0):.2f}")
+                st.metric("Agentes en equipo", ia_metrics.get("agent_count", "N/A"))
+                st.metric("Modo de equipo", ia_metrics.get("team_mode", "N/A"))
 
         st.caption("💡 Sugerencia: El equipo IA utiliza ahora capacidades avanzadas de Agno Teams para análisis coordinado y streaming en tiempo real.")
 

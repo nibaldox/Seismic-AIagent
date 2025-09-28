@@ -83,10 +83,10 @@ class TeamSeismicAnalysis:
         if telemetry_agent:
             team_members.append(telemetry_agent)
             member_instructions[telemetry_agent.name] = [
-                "Especialista en análisis de telemetría e histogramas",
-                "Detecta tendencias, anomalías y correlaciones en series temporales",
-                "Proporciona análisis técnico con niveles de confianza",
-                "Explica hallazgos de manera sencilla para usuarios no técnicos"
+                "Especialista en analisis de telemetria e histogramas",
+                "Detecta tendencias, anomalias y correlaciones en series temporales",
+                "Proporciona analisis tecnico con niveles de confianza",
+                "Explica hallazgos de manera sencilla para usuarios no tecnicos"
             ]
 
         # Waveform Analysis Agent
@@ -94,10 +94,10 @@ class TeamSeismicAnalysis:
         if waveform_agent:
             team_members.append(waveform_agent)
             member_instructions[waveform_agent.name] = [
-                "Especialista en análisis de formas de onda sísmicas",
-                "Caracteriza señales, identifica fases P/S y eventos sísmicos",
-                "Evalúa calidad de las señales y posibles contaminaciones",
-                "Proporciona mediciones técnicas con incertidumbre"
+                "Especialista en analisis de formas de onda sismicas",
+                "Caracteriza senales, identifica fases P/S y eventos sismicos",
+                "Evalua calidad de las senales y posibles contaminaciones",
+                "Proporciona mediciones tecnicas con incertidumbre"
             ]
 
         # Earthquake Search Agent
@@ -105,10 +105,10 @@ class TeamSeismicAnalysis:
         if eq_agent:
             team_members.append(eq_agent)
             member_instructions[eq_agent.name] = [
-                "Especialista en búsqueda y análisis de catálogos sísmicos",
-                "Consulta bases de datos de sismicidad histórica (USGS, EMSC)",
-                "Identifica eventos relevantes en el área de estudio",
-                "Evalúa contexto sísmico regional y posibles correlaciones"
+                "Especialista en busqueda y analisis de catalogos sismicos",
+                "Consulta bases de datos de sismicidad historica (USGS, EMSC)",
+                "Identifica eventos relevantes en el area de estudio",
+                "Evalua contexto sismico regional y posibles correlaciones"
             ]
 
         # Quality Assurance/Critic Agent
@@ -116,10 +116,10 @@ class TeamSeismicAnalysis:
         if critic_agent:
             team_members.append(critic_agent)
             member_instructions[critic_agent.name] = [
-                "Auditor crítico de calidad y consistencia",
-                "Revisa análisis de otros agentes por contradicciones",
-                "Identifica datos faltantes o interpretaciones débiles",
-                "Propone clarificaciones y análisis adicionales"
+                "Auditor critico de calidad y consistencia",
+                "Revisa analisis de otros agentes por contradicciones",
+                "Identifica datos faltantes o interpretaciones debiles",
+                "Propone clarificaciones y analisis adicionales"
             ]
 
         # Report Generation Agent
@@ -127,34 +127,34 @@ class TeamSeismicAnalysis:
         if reporter_agent:
             team_members.append(reporter_agent)
             member_instructions[reporter_agent.name] = [
-                "Sintetizador final de informes técnicos",
+                "Sintetizador final de informes tecnicos",
                 "Integra hallazgos de todos los agentes en reporte coherente",
-                "Estructura información técnica con explicaciones sencillas",
-                "Proporciona recomendaciones prácticas basadas en evidencia"
+                "Estructura informacion tecnica con explicaciones sencillas",
+                "Proporciona recomendaciones practicas basadas en evidencia"
             ]
 
         self.team = Team(
-            name="Equipo de Análisis Sísmico",
+            name="Equipo de Analisis Sismico",
             mode="collaborate",
-            description="Equipo multi-agente especializado en análisis integral de datos sísmicos",
+            description="Equipo multi-agente especializado en analisis integral de datos sismicos",
             members=team_members,
             instructions=[
-                "Coordina el análisis sísmico siguiendo este flujo estructurado:",
-                "1. Análisis de telemetría/histogramas para detectar anomalías",
-                "2. Análisis de formas de onda para caracterizar señales",
-                "3. Búsqueda de sismicidad histórica cercana",
-                "4. Localización 1D si hay suficientes datos",
-                "5. Revisión crítica QA de hallazgos",
-                "6. Síntesis final del reporte",
+                "Coordina el analisis sismico siguiendo este flujo estructurado:",
+                "1. Analisis de telemetria/histogramas para detectar anomalias",
+                "2. Analisis de formas de onda para caracterizar senales",
+                "3. Busqueda de sismicidad historica cercana",
+                "4. Localizacion 1D si hay suficientes datos",
+                "5. Revision critica QA de hallazgos",
+                "6. Sintesis final del reporte",
                 "",
-                "Cada agente debe proporcionar análisis técnico con niveles de confianza",
-                "y explicaciones sencillas en español para usuarios no técnicos.",
-                "Mantén consistencia factual y evita contradicciones entre análisis."
+                "Cada agente debe proporcionar analisis tecnico con niveles de confianza",
+                "y explicaciones sencillas en espanol para usuarios no tecnicos.",
+                "Manten consistencia factual y evita contradicciones entre analisis."
             ] + [
-                f"Agente {agent.name}: {member_instructions.get(agent.name, ['Sin instrucciones específicas'])[0]}"
+                f"Agente {agent.name}: {member_instructions.get(agent.name, ['Sin instrucciones especificas'])[0]}"
                 for agent in team_members
             ],
-            expected_output="Informe completo en markdown con hallazgos técnicos, explicaciones sencillas y recomendaciones prácticas",
+            expected_output="Informe completo en markdown con hallazgos tecnicos, explicaciones sencillas y recomendaciones practicas",
             show_tool_calls=True,
             markdown=True,
             debug_mode=False,
@@ -204,7 +204,7 @@ class TeamSeismicAnalysis:
             except Exception as fallback_exc:
                 LOGGER.error(f"Fallback team analysis also failed: {fallback_exc}")
                 return {
-                    "markdown": f"Error en análisis de equipo: {exc}",
+                    "markdown": f"Error en analisis de equipo: {exc}",
                     "error": str(exc),
                     "duration": duration,
                     "team_mode": "coordinate",
@@ -230,7 +230,7 @@ class TeamSeismicAnalysis:
     def _build_analysis_prompt(self, context: Dict[str, Any]) -> str:
         """Build comprehensive analysis prompt from context data."""
         prompt_parts = [
-            "Realiza un análisis integral de datos sísmicos coordinado por el equipo:",
+            "Realiza un analisis integral de datos sismicos coordinado por el equipo:",
             "",
             "## Datos Disponibles:"
         ]
@@ -239,7 +239,7 @@ class TeamSeismicAnalysis:
         if context.get("telemetry"):
             tel = context["telemetry"]
             prompt_parts.extend([
-                f"### Telemetría/Histogramas",
+                f"### Telemetria/Histogramas",
                 f"- Archivo: {tel.get('filename', 'N/A')}",
                 f"- Columnas: {', '.join(tel.get('columns', []))}",
                 f"- Rango temporal: {context.get('time_range', 'N/A')}",
@@ -261,8 +261,8 @@ class TeamSeismicAnalysis:
         if context.get("location"):
             loc = context["location"]
             prompt_parts.extend([
-                f"### Datos de Localización 1D",
-                f"- Estaciones: {len(loc.get('stations', []))} con coordenadas geográficas",
+                f"### Datos de Localizacion 1D",
+                f"- Estaciones: {len(loc.get('stations', []))} con coordenadas geograficas",
                 f"- Observaciones: {len(loc.get('observations', []))} tiempos P/S",
                 f"- Modelo de velocidad: Vp={loc.get('model', {}).get('vp', 6.0)} km/s, Vs={loc.get('model', {}).get('vs', 3.5)} km/s",
                 ""
@@ -272,29 +272,29 @@ class TeamSeismicAnalysis:
         if context.get("eq_search"):
             eq = context["eq_search"]
             prompt_parts.extend([
-                f"### Búsqueda de Sismicidad",
+                f"### Busqueda de Sismicidad",
                 f"- Centro: {eq.get('latitude')}, {eq.get('longitude')}",
                 f"- Radio: {eq.get('radius_km', 100)} km",
-                f"- Período: {eq.get('days', 30)} días",
-                f"- Magnitud mínima: {eq.get('min_magnitude', 2.5)}",
+                f"- Periodo: {eq.get('days', 30)} dias",
+                f"- Magnitud minima: {eq.get('min_magnitude', 2.5)}",
                 ""
             ])
 
         prompt_parts.extend([
-            "## Instrucciones de Análisis:",
-            "1. **Análisis de Telemetría**: Detecta tendencias, anomalías y correlaciones",
-            "2. **Análisis de Ondas**: Caracteriza señales sísmicas y eventos",
-            "3. **Catálogo Sísmico**: Busca eventos históricos relevantes",
-            "4. **Localización**: Estima epicentro si hay suficientes datos",
-            "5. **Revisión Crítica**: Identifica contradicciones o datos faltantes",
-            "6. **Síntesis Final**: Integra todos los hallazgos coherentemente",
+            "## Instrucciones de Analisis:",
+            "1. **Analisis de Telemetria**: Detecta tendencias, anomalias y correlaciones",
+            "2. **Analisis de Ondas**: Caracteriza senales sismicas y eventos",
+            "3. **Catalogo Sismico**: Busca eventos historicos relevantes",
+            "4. **Localizacion**: Estima epicentro si hay suficientes datos",
+            "5. **Revision Critica**: Identifica contradicciones o datos faltantes",
+            "6. **Sintesis Final**: Integra todos los hallazgos coherentemente",
             "",
             "## Formato de Salida:",
-            "- **Resumen Técnico**: Hallazgos estructurados con niveles de confianza",
-            "- **Explicación Sencilla**: 2-3 acciones prácticas para no técnicos",
-            "- **Recomendaciones**: Próximos pasos basados en evidencia",
+            "- **Resumen Tecnico**: Hallazgos estructurados con niveles de confianza",
+            "- **Explicacion Sencilla**: 2-3 acciones practicas para no tecnicos",
+            "- **Recomendaciones**: Proximos pasos basados en evidencia",
             "",
-            "Responde en español. Mantén consistencia factual entre análisis."
+            "Responde en espanol. Manten consistencia factual entre analisis."
         ])
 
         return "\n".join(prompt_parts)
@@ -487,9 +487,9 @@ def run_primary_analysis(agents: Dict[str, "AgnoAgent"], summary: str) -> Option
         return None
 
     prompt = (
-        "Eres un sismólogo experto.\n"
-        "Entrega: (1) un resumen técnico breve en español (llegadas P/S, hipótesis, incertidumbre), y\n"
-        "(2) una explicación sencilla para personal no técnico (en términos claros, sin jerga), con 2-3 acciones o recomendaciones prácticas.\n\n"
+        "Eres un sismologo experto.\n"
+        "Entrega: (1) un resumen tecnico breve en espanol (llegadas P/S, hipotesis, incertidumbre), y\n"
+        "(2) una explicacion sencilla para personal no tecnico (en terminos claros, sin jerga), con 2-3 acciones o recomendaciones practicas.\n\n"
         f"Contexto de formas de onda:\n{summary}"
     )
     _monitor_event("agent_run", task="waveform_analysis")
@@ -541,22 +541,22 @@ def run_histogram_analysis(
     cols_block = ", ".join(columns) if columns else "(no especificado)"
     
     prompt = (
-        "Eres un analista sismológico especializado en datos de geófonos e histogramas sísmicos.\n\n"
-        "INSTRUCCIONES ESPECÍFICAS:\n"
+        "Eres un analista sismologico especializado en datos de geofonos e histogramas sismicos.\n\n"
+        "INSTRUCCIONES ESPECIFICAS:\n"
         "Analyze Gecko histogram/telemetry time series: trends, anomalies, thresholds, and possible seismic/operational causes. Output must have two layers: (1) Technical summary (confidence, thresholds, correlations). (2) Plain-language explanation for non-technical staff with 2-3 actionable recommendations. Answer in Spanish.\n\n"
-        "ANÁLISIS REQUERIDO:\n"
-        "- Analiza ÚNICAMENTE los datos numéricos mostrados en la tabla abajo\n"
-        "- Calcula estadísticas reales basadas en los valores proporcionados (media, máximo, mínimo, etc.)\n"
-        "- Identifica tendencias y anomalías en las series temporales\n"
-        "- Evalúa correlaciones entre variables sísmicas (3D_Peak, N, E, Z) y operativas (Voltage, Temperature)\n"
+        "ANALISIS REQUERIDO:\n"
+        "- Analiza UNICAMENTE los datos numericos mostrados en la tabla abajo\n"
+        "- Calcula estadisticas reales basadas en los valores proporcionados (media, maximo, minimo, etc.)\n"
+        "- Identifica tendencias y anomalias en las series temporales\n"
+        "- Evalua correlaciones entre variables sismicas (3D_Peak, N, E, Z) y operativas (Voltage, Temperature)\n"
         "- Establece umbrales basados en los datos observados\n"
-        "- Proporciona nivel de confianza del análisis\n\n"
+        "- Proporciona nivel de confianza del analisis\n\n"
         f"Archivo: {filename or '(subido)'}\n"
         + (f"Rango de fechas: {time_range}\n" if time_range else "")
         + (f"Metadatos:\n{meta_block}\n\n" if meta_block else "")
         + f"Columnas visualizadas: {cols_block}\n\n"
-        + (f"Contexto/ajustes de visualización: {notes}\n\n" if notes else "")
-        + "DATOS PARA ANALIZAR (usar estos valores exactos para cálculos):\n"
+        + (f"Contexto/ajustes de visualizacion: {notes}\n\n" if notes else "")
+        + "DATOS PARA ANALIZAR (usar estos valores exactos para calculos):\n"
         + df_head
     )
     _monitor_event("agent_run", task="histogram_analysis")
@@ -616,8 +616,8 @@ def run_team_analysis(
                     timestamp_iso=tel.get("analysis_ts", ""),
                     time_window=context.get("time_range"),
                     variables=tel.get("columns", []),
-                    summary="Análisis de telemetría por equipo IA",
-                    details="Integrado en análisis coordinado del equipo",
+                    summary="Analisis de telemetria por equipo IA",
+                    details="Integrado en analisis coordinado del equipo",
                 )
             )
 
@@ -628,8 +628,8 @@ def run_team_analysis(
                     author="waveform_team",
                     timestamp_iso=context.get("analysis_ts", ""),
                     time_window=context.get("time_range"),
-                    summary="Análisis de formas de onda por equipo IA",
-                    details="Integrado en análisis coordinado del equipo",
+                    summary="Analisis de formas de onda por equipo IA",
+                    details="Integrado en analisis coordinado del equipo",
                 )
             )
 
@@ -640,8 +640,8 @@ def run_team_analysis(
                     author="earthquake_team",
                     timestamp_iso=context.get("analysis_ts", ""),
                     time_window=context.get("time_range"),
-                    summary="Búsqueda de sismicidad histórica por equipo IA",
-                    details="Integrado en análisis coordinado del equipo",
+                    summary="Busqueda de sismicidad historica por equipo IA",
+                    details="Integrado en analisis coordinado del equipo",
                 )
             )
 
@@ -682,12 +682,12 @@ def _run_sequential_team_analysis(
         filename = telemetry.get("filename")
         time_range = context.get("time_range")
         try:
-            # Si hay un agente dedicado para telemetry, úsalo; de lo contrario, reutiliza histogram_analysis
+            # Si hay un agente dedicado para telemetry, usalo; de lo contrario, reutiliza histogram_analysis
             telemetry_agent = agents.get("telemetry_analysis") or agents.get("histogram_analysis")
             if telemetry_agent is not None:
                 prompt = (
-                    "Eres el analista de telemetría/histogramas.\n"
-                    "Entrega en español: (1) resumen técnico con tendencias, anomalías, correlaciones e hipótesis; (2) explicación sencilla y 2-3 acciones prácticas para personal no técnico.\n"
+                    "Eres el analista de telemetria/histogramas.\n"
+                    "Entrega en espanol: (1) resumen tecnico con tendencias, anomalias, correlaciones e hipotesis; (2) explicacion sencilla y 2-3 acciones practicas para personal no tecnico.\n"
                     f"Rango: {time_range or '-'} | Columnas: {', '.join(cols)}\n"
                     + (f"Notas: {notes}\n" if notes else "")
                     + ("Vista previa (parcial):\n" + df_head if df_head else "")
@@ -721,7 +721,7 @@ def _run_sequential_team_analysis(
                     time_window=time_range,
                     variables=cols,
                     params=telemetry.get("params"),
-                    summary="Resumen IA de telemetría",
+                    summary="Resumen IA de telemetria",
                     details=content,
                     confidence=None,
                 )
@@ -747,7 +747,7 @@ def _run_sequential_team_analysis(
                 )
             )
 
-    # 3) Búsqueda de sismicidad cercana (opcional)
+    # 3) Busqueda de sismicidad cercana (opcional)
     eq_ctx = context.get("eq_search") or {}
     eq_summary_md: Optional[str] = None
     if eq_ctx.get("latitude") is not None and eq_ctx.get("longitude") is not None:
@@ -756,12 +756,12 @@ def _run_sequential_team_analysis(
                 "https://earthquake.usgs.gov/fdsnws/event/1/",
                 "https://www.seismicportal.eu/fdsnws/event/1/",
             )
-            # Intentar acotar por ventana temporal explícita si viene desde Histogramas
+            # Intentar acotar por ventana temporal explicita si viene desde Histogramas
             time_range = context.get("time_range")
             start_dt = end_dt = None
-            if isinstance(time_range, str) and "→" in time_range:
+            if isinstance(time_range, str) and "->" in time_range:
                 try:
-                    left, right = time_range.split("→", 1)
+                    left, right = time_range.split("->", 1)
                     left = left.strip(); right = right.strip()
                     try:
                         import pandas as pd  # type: ignore
@@ -796,14 +796,14 @@ def _run_sequential_team_analysis(
             eq_summary_md = searcher.summarize_results(results)
         except Exception as exc:
             LOGGER.warning("earthquake search failed: %s", exc)
-            eq_summary_md = f"No se pudo consultar el catálogo: {exc}"
+            eq_summary_md = f"No se pudo consultar el catalogo: {exc}"
         fb.add_finding(
             Finding(
                 type="finding",
                 author="eq_search",
                 timestamp_iso=context.get("analysis_ts", ""),
                 time_window=context.get("time_range"),
-                summary="Eventos sísmicos cercanos (USGS/EMSC)",
+                summary="Eventos sismicos cercanos (USGS/EMSC)",
                 details=eq_summary_md,
                 params={
                     "lat": eq_ctx.get("latitude"),
@@ -815,7 +815,7 @@ def _run_sequential_team_analysis(
             )
         )
 
-    # 4) Localización 1D (opcional)
+    # 4) Localizacion 1D (opcional)
     loc_ctx = context.get("location") or {}
     loc_result_md: Optional[str] = None
     if loc_ctx:
@@ -843,7 +843,7 @@ def _run_sequential_team_analysis(
                     def to_xy(lat: float, lon: float) -> tuple[float, float]:
                         return project(lat, lon, lat0, lon0)
                 except Exception:
-                    # Fallback aproximado si pyproj no está disponible
+                    # Fallback aproximado si pyproj no esta disponible
                     import math
                     def to_xy(lat: float, lon: float) -> tuple[float, float]:
                         dx = (lon - lon0) * math.cos(math.radians(lat0)) * 111.32
@@ -882,7 +882,7 @@ def _run_sequential_team_analysis(
                     f"Residuales (primeros): {residuals_txt}"
                 )
             else:
-                loc_result_md = "Localización no resuelta (insuficientes estaciones/observaciones)."
+                loc_result_md = "Localizacion no resuelta (insuficientes estaciones/observaciones)."
         except Exception as exc:
             LOGGER.warning("1D locator failed: %s", exc)
             loc_result_md = f"No se pudo ejecutar el localizador: {exc}"
@@ -893,7 +893,7 @@ def _run_sequential_team_analysis(
                 author="locator_1d",
                 timestamp_iso=context.get("analysis_ts", ""),
                 time_window=context.get("time_range"),
-                summary="Localización 1D superficial (grid)",
+                summary="Localizacion 1D superficial (grid)",
                 details=loc_result_md,
                 params={
                     "vp": model_in.get("vp"),
@@ -904,14 +904,14 @@ def _run_sequential_team_analysis(
             )
         )
 
-    # 5) QA/Crítica básica (si hay agente)
+    # 5) QA/Critica basica (si hay agente)
     critic = agents.get("critic_qa") or agents.get("quality_assurance")
     qa_notes = None
     if critic and fb.facts:
         try:
             compact_facts = "\n".join(f"- ({f.author}) {f.summary}" for f in fb.facts)
             prompt = (
-                "Actúa como crítico QA. Enlista contradicciones, ambigüedades o claims sin evidencia. Responde en español.\n"
+                "Actua como critico QA. Enlista contradicciones, ambiguedades o claims sin evidencia. Responde en espanol.\n"
                 + compact_facts
             )
             start_time = time.time()
@@ -922,17 +922,17 @@ def _run_sequential_team_analysis(
             LOGGER.info(f"QA critic agent response time: {duration:.2f}s, Average: {avg_time:.2f}s" if avg_time else f"QA critic agent response time: {duration:.2f}s")
             qa_notes = getattr(qa_res, "content", None)
             if qa_notes:
-                fb.add_contradiction("Revisión QA aplicada. Ver notas abajo.")
+                fb.add_contradiction("Revision QA aplicada. Ver notas abajo.")
         except Exception as exc:
             LOGGER.warning("critic agent failed: %s", exc)
 
-    # 6) Reporter: si existe un agente 'reporter', usarlo para pulir la síntesis
+    # 6) Reporter: si existe un agente 'reporter', usarlo para pulir la sintesis
     lines: List[str] = []
     lines.append("## Resumen ejecutivo")
-    lines.append("Este es un informe generado por un equipo multi‑agente.\n")
+    lines.append("Este es un informe generado por un equipo multi-agente.\n")
 
     if fb.facts:
-        lines.append("## Hallazgos (Telemetría, Waveform, Catálogo y Localización)")
+        lines.append("## Hallazgos (Telemetria, Waveform, Catalogo y Localizacion)")
         for i, f in enumerate(fb.facts, start=1):
             lines.append(f"- [{i}] ({f.author}) ventana={f.time_window or '-'} | vars={', '.join(f.variables or [])}")
             if f.details:
@@ -958,11 +958,11 @@ def _run_sequential_team_analysis(
     reporter = agents.get("reporter") or agents.get("report_generation")
     if reporter:
         try:
-            # Construimos un prompt compacto con el borrador + contexto mínimo
+            # Construimos un prompt compacto con el borrador + contexto minimo
             brief = (
-                "Eres el redactor. Mejora el borrador en español con dos capas: \n"
-                "1) Resumen técnico estructurado (viñetas, niveles de confianza, referencias a hallazgos).\n"
-                "2) Explicación sencilla para no técnicos con 2-3 acciones prácticas.\n"
+                "Eres el redactor. Mejora el borrador en espanol con dos capas: \n"
+                "1) Resumen tecnico estructurado (vinetas, niveles de confianza, referencias a hallazgos).\n"
+                "2) Explicacion sencilla para no tecnicos con 2-3 acciones practicas.\n"
                 "No inventes datos; conserva lo factual.\n\n"
                 "Borrador:\n" + draft
             )

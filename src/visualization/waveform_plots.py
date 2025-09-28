@@ -1,8 +1,11 @@
-"""Plotly helpers for waveform visualization."""
-
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Tuple
+from typing import Literal
+FilterType = Literal['bandpass', 'highpass', 'lowpass', 'none']
+
+"""Plotly helpers for waveform visualization."""
+
+from typing import Any, cast, Iterable, List, Tuple
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -83,6 +86,30 @@ def _format_micro_g(value_in_g: float) -> str:
     if micro_g >= 1000:  # show in milli-g
         return f"{value_in_g*1000:.3f} mg"
     return f"{micro_g:.1f} µg"
+
+
+def adaptive_downsample(data: np.ndarray, times: np.ndarray, target_points: int = 1200) -> tuple[np.ndarray, np.ndarray]:
+    """Reduce la cantidad de puntos preservando min/max por bucket (ideal para visualización)."""
+    n = len(data)
+    if n <= target_points or target_points < 10:
+        return times, data
+    bucket_size = n // target_points
+    # Si bucket_size < 2, no hace falta downsampling
+    if bucket_size < 2:
+        return times, data
+    # Para cada bucket, tomar min y max
+    down_times = []
+    down_data = []
+    for i in range(0, n, bucket_size):
+        chunk = data[i:i+bucket_size]
+        t_chunk = times[i:i+bucket_size]
+        if len(chunk) == 0:
+            continue
+        min_idx = np.argmin(chunk)
+        max_idx = np.argmax(chunk)
+        down_data.extend([chunk[min_idx], chunk[max_idx]])
+        down_times.extend([t_chunk[min_idx], t_chunk[max_idx]])
+    return np.array(down_times), np.array(down_data)
 
 
 def create_waveform_plot(
@@ -179,18 +206,22 @@ def create_waveform_plot(
         sr = float(getattr(stats, "sampling_rate", 0) or 0)
         if filter_type and filter_type != "none" and sr > 0 and freqmin is not None and freqmax is not None:
             try:
-                masked_data = apply_filter(masked_data, sr, filter_type=filter_type, freqmin=freqmin, freqmax=freqmax)
+                masked_data = apply_filter(masked_data, sr, filter_type=cast(FilterType, filter_type), freqmin=freqmin, freqmax=freqmax)
             except Exception:  # pragma: no cover
                 pass
 
+        # Downsampling adaptativo para visualización
+        target_points = 1200  # Valor típico para performance y detalle
+        down_times, down_data = adaptive_downsample(masked_data, masked_times, target_points=target_points)
+
         # Convert chosen display unit
-        masked_data, axis_unit = _convert_cmps2(masked_data, unit)
-        processed_arrays.append(masked_data)
+        down_data, axis_unit = _convert_cmps2(down_data, unit)
+        processed_arrays.append(down_data)
 
         fig.add_trace(
             go.Scatter(
-                x=masked_times,
-                y=masked_data,
+                x=down_times,
+                y=down_data,
                 name=name,
                 mode="lines",
                 line=dict(color=_trace_color(trace, idx - 1), width=2.0),
