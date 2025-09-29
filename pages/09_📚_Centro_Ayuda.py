@@ -4,13 +4,7 @@ Centro completo de documentación y soporte para usuarios
 """
 
 import streamlit as st
-import sys
-import os
-
-# Agregar el directorio src al path para importaciones
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from streamlit_utils.help_system import help_system
+from src.streamlit_utils.help_system import help_system
 
 # Configuración de página
 st.set_page_config(
@@ -395,7 +389,7 @@ def show_support():
     
     with col1:
         if st.button("🐙 GitHub Repository", help="Ver código fuente y reportar issues"):
-            st.info("🔗 https://github.com/user/seismic-aiagent")
+            st.info("🔗 https://github.com/nibaldox/Seismic-AIagent")
     
     with col2:
         if st.button("📧 Contacto Email", help="Soporte técnico directo"):  
