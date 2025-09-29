@@ -12,16 +12,9 @@ except ModuleNotFoundError:  # pragma: no cover
     DDGS = None
 
 from src.utils.logger import setup_logger
+from .base import Tool
 
 LOGGER = setup_logger(__name__)
-
-
-class Tool:
-    name: str = "tool"
-    description: str = ""
-
-    def run(self, *args, **kwargs):  # pragma: no cover
-        raise NotImplementedError
 
 
 @dataclass

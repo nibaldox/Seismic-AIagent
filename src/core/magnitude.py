@@ -388,5 +388,19 @@ def estimate_local_magnitude_wa(*, picks: Sequence[Dict[str, Any]], trace_data: 
     )
 
 
-# Alias para compatibilidad
-estimate_local_magnitude = estimate_local_magnitude_placeholder
+def estimate_local_magnitude(*args, **kwargs) -> MagnitudeResult:
+    """Compat wrapper that accepts both positional and keyword arguments.
+
+    Expected order for positional: (picks, trace_data, trace_sampling_rate, station)
+    """
+    if args and not kwargs:
+        if len(args) != 4:
+            raise TypeError("estimate_local_magnitude expects 4 positional args: picks, trace_data, trace_sampling_rate, station")
+        picks, trace_data, trace_sampling_rate, station = args
+        return estimate_local_magnitude_placeholder(
+            picks=picks,
+            trace_data=trace_data,
+            trace_sampling_rate=trace_sampling_rate,
+            station=station,
+        )
+    return estimate_local_magnitude_placeholder(**kwargs)

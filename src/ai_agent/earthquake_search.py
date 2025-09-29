@@ -175,7 +175,7 @@ class EarthquakeSearcher:
                     if "EMSC search not available" in error_msg:
                         lines.append("> [info] EMSC only covers Europe/Mediterranean region. USGS provides global coverage.")
                     else:
-                        lines.append(f"> [warning] {error_msg}")
+                        lines.append(f"> [warning] ⚠️ {error_msg}")
                 continue
             for feature in features[:5]:
                 lines.append(f"- {self.format_feature(feature)}")
@@ -183,5 +183,5 @@ class EarthquakeSearcher:
             if remaining:
                 lines.append(f"- ... {remaining} additional events not shown.")
             if source in self.last_errors:
-                lines.append(f"> [warning] {self.last_errors[source]}")
+                lines.append(f"> [warning] ⚠️ {self.last_errors[source]}")
         return "\n".join(lines)

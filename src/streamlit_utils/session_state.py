@@ -1,5 +1,53 @@
 
+"""
+Utilidades para manejar el estado de sesión de Streamlit.
+
+Este módulo centraliza toda la gestión de estado compartido entre páginas:
+- Sesión principal y metadatos
+- Selección y registro de streams/trazas
+- Picks P/S y contexto para equipo IA
+- Caché ligera de arrays de traza
+- Persistencia de datos de histogramas
+"""
+
 from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional
+import streamlit as st
+
+# --- API pública ---
+__all__ = [
+    "SeismicSession",
+    "get_session",
+    # Caché de trazas
+    "set_trace_cache",
+    "get_trace_cache",
+    "clear_trace_cache",
+    # Picks
+    "add_pick",
+    "list_picks",
+    "clear_picks",
+    # Streams y trazas
+    "register_stream",
+    "get_current_stream",
+    "get_current_stream_name",
+    "list_dataset_names",
+    "set_current_stream",
+    "get_stream_summary",
+    "list_trace_labels",
+    "set_selected_trace",
+    "get_selected_trace",
+    "get_selected_trace_label",
+    "get_traces_by_labels",
+    # Telemetría/Equipo IA
+    "set_team_telemetry_context",
+    "get_team_context",
+    # Histogramas
+    "set_histogram_data",
+    "get_histogram_data",
+    "clear_histogram_data",
+]
+
 # --- Memoización/caché de arrays de traza ---
 def set_trace_cache(key: str, value: Any, session: Optional[SeismicSession] = None) -> None:
     session = session or get_session()
@@ -12,27 +60,18 @@ def get_trace_cache(key: str, session: Optional[SeismicSession] = None) -> Any:
 def clear_trace_cache(session: Optional[SeismicSession] = None) -> None:
     session = session or get_session()
     session.metadata["trace_cache"] = {}
-"""Utilidades para manejar el estado de sesion de Streamlit."""
-
-from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
-
-import streamlit as st
 
 
 @dataclass
+
 class SeismicSession:
     """Dataclass que encapsula los datos persistentes de la app."""
-
     dataset_name: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
     stream_summary: Optional[str] = None
     ai_results: Dict[str, Any] = field(default_factory=dict)
-    # Picks stored as list[dict]
     picks: List[Dict[str, Any]] = field(default_factory=list)
-    # Multiagente: contexto de telemetria/series para Equipo IA
     team_context: Dict[str, Any] = field(default_factory=dict)
-    # Histogramas: datos persistentes
     histogram_data: Optional[Any] = None  # DataFrame
     histogram_meta: Dict[str, Any] = field(default_factory=dict)
     histogram_filename: Optional[str] = None

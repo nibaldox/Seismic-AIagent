@@ -17,7 +17,7 @@ load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 
 from src.ai_agent.earthquake_search import EarthquakeQuery, EarthquakeSearcher
 from src.ai_agent.report_generator import build_report_agent, generate_markdown_report, build_report_md
-from src.ai_agent.seismic_interpreter import load_agent_suite, run_primary_analysis
+from src.ai_agent.seismic_interpreter import load_agent_suite, run_primary_analysis, run_team_analysis
 from src.streamlit_utils.session_state import (
     get_current_stream_name,
     get_session,
@@ -26,6 +26,7 @@ from src.streamlit_utils.session_state import (
     list_dataset_names,
     list_trace_labels,
     set_current_stream,
+    get_team_context,
 )
 from src.utils.config import load_yaml
 from src.utils.logger import setup_logger
@@ -206,12 +207,64 @@ def main() -> None:
     config = load_yaml("agno_config.yaml").get("seismic_interpreter", {})
     st.subheader("AI Analysis")
 
+    # Opciones avanzadas (equipo IA) para incluir telemetría/histogramas previos
+    with st.expander("Opciones avanzadas (Equipo IA)"):
+        include_telemetry = st.checkbox(
+            "Incluir telemetría/histogramas desde el contexto (página Histogramas)",
+            value=False,
+            help="Si está activo, el equipo IA considerará la vista previa y columnas enviadas desde la página de Histogramas.",
+        )
+
+    # Selección de modo de análisis: agente de waveform o equipo IA coordinado
+    analysis_mode = st.radio(
+        "Modo de análisis",
+        options=["Agente de Waveform", "Equipo IA (coordinado)"],
+        horizontal=True,
+        help="Elige si deseas una interpretación rápida del agente de waveform o un análisis coordinado multi‑agente.",
+    )
+
     if st.button("🚀 Run AI Interpretation", disabled=not selected_labels):
         prompt_summary = _build_trace_context(session, selected_labels)
         with st.spinner("Running AI agents..."):
             try:
-                analysis = run_primary_analysis(agents, prompt_summary)
-                session.ai_results["analysis"] = analysis
+                if analysis_mode == "Equipo IA (coordinado)":
+                    # Contexto para equipo IA: waveform + opcionalmente telemetría + eq_search desde metadatos
+                    telemetry_ctx = None
+                    if include_telemetry:
+                        team_ctx = get_team_context() or {}
+                        telemetry_src = team_ctx.get("telemetry") or {}
+                        if telemetry_src:
+                            telemetry_ctx = {
+                                "columns": telemetry_src.get("columns", []),
+                                "df_head": telemetry_src.get("df_head", ""),
+                                "notes": telemetry_src.get("notes"),
+                                "meta": telemetry_src.get("meta", {}),
+                                "filename": telemetry_src.get("filename"),
+                                "analysis_ts": telemetry_src.get("analysis_ts"),
+                                "params": telemetry_src.get("params"),
+                            }
+
+                    context = {
+                        "time_range": None,
+                        "telemetry": telemetry_ctx,
+                        "waveform_summary": prompt_summary,
+                        # Coordenadas persistidas para correlación sísmica
+                        "eq_search": {
+                            "latitude": session.metadata.get("earthquake_search_lat"),
+                            "longitude": session.metadata.get("earthquake_search_lon"),
+                            "radius_km": int(session.metadata.get("earthquake_search_radius_km", 100)),
+                            "days": 30,
+                            "min_magnitude": 2.5,
+                        },
+                        "location": None,
+                    }
+                    result = run_team_analysis(agents, context=context)
+                    analysis = (result or {}).get("markdown")
+                    session.ai_results["analysis"] = analysis
+                else:
+                    # Modo clásico: agente de waveform
+                    analysis = run_primary_analysis(agents, prompt_summary)
+                    session.ai_results["analysis"] = analysis
             except Exception as exc:
                 handle_error(exc, context="Error en análisis IA")
                 analysis = None

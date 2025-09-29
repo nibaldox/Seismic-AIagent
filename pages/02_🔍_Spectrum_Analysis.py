@@ -1,8 +1,18 @@
-"""Spectral analysis page with AI interpretation."""
+"""Spectral analysis page with AI interpretation and integrated help."""
 
 from __future__ import annotations
 
 import streamlit as st
+
+# Importar sistema de ayuda
+try:
+    from src.streamlit_utils.help_system import show_help, show_quick_help
+except ImportError:
+    # Fallback si no se puede importar
+    def show_help(page_key, expanded=False):
+        pass
+    def show_quick_help():
+        pass
 
 from src.streamlit_utils.session_state import (
     get_current_stream_name,
@@ -76,7 +86,7 @@ def _render_ai_analysis_panel(trace, analysis_type: str, analysis_params: dict, 
         if agent_error:
             container.error(f"No se pudo inicializar el intérprete: {agent_error}")
         else:
-            container.info("Configura los agentes IA en config/agno_config.yaml.")
+            container.info("Configura los agentes IA en config/agents_config.yaml (asegura que exista 'spectrum_analyzer').")
         return
     
     if trace is None:
@@ -124,7 +134,7 @@ def _render_ai_analysis_panel(trace, analysis_type: str, analysis_params: dict, 
             if analysis:
                 st.session_state[result_key] = analysis
             else:
-                container.warning("No se recibió respuesta del agente.")
+                container.warning("No se recibió respuesta del agente. Verifica que 'spectrum_analysis' esté definido en agents_config.yaml.")
                 st.session_state[result_key] = None
             st.session_state[done_key] = True
     
@@ -139,6 +149,12 @@ def _render_ai_analysis_panel(trace, analysis_type: str, analysis_params: dict, 
 def main() -> None:
     st.header("🔍 Spectrum Analysis")
     st.caption("Análisis espectral independiente de trazas sísmicas.")
+    
+    # Mostrar ayuda contextual
+    try:
+        show_help("spectrum", expanded=False)
+    except:
+        pass  # Si no se puede mostrar ayuda, continuar sin ella
     
     session = get_session()
 

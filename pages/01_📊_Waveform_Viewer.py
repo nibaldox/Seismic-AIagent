@@ -1,4 +1,4 @@
-"""Waveform viewer page."""
+"""Waveform viewer page with integrated help system."""
 
 from __future__ import annotations
 
@@ -6,6 +6,21 @@ from typing import Any, Iterable, List
 from numbers import Number
 
 import streamlit as st
+import sys
+import os
+
+# Agregar el directorio src al path para importaciones
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+# Importar sistema de ayuda
+try:
+    from streamlit_utils.help_system import show_help, show_quick_help
+except ImportError:
+    # Fallback si no se puede importar
+    def show_help(page_key, expanded=False):
+        pass
+    def show_quick_help():
+        pass
 
 from src.core.data_reader import DataReader
 from src.streamlit_utils.file_uploader import seismic_file_uploader
@@ -102,6 +117,13 @@ def _extract_traces(stream_container: Any) -> Iterable[Any]:
 
 def main() -> None:
     st.header("📊 Waveform Viewer")
+    
+    # Mostrar ayuda contextual
+    try:
+        show_help("waveform", expanded=False)
+    except:
+        pass  # Si no se puede mostrar ayuda, continuar sin ella
+    
     session = get_session()
     reader = DataReader()
 

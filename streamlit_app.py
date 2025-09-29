@@ -6,21 +6,6 @@ from pathlib import Path
 import os
 
 import streamlit as st
-with st.sidebar:
-     st.markdown("---")
-     st.subheader("🩺 Panel de Salud")
-     # Estado de claves API
-     openrouter_key = st.session_state.get("openrouter_api_key") or os.getenv("OPENROUTER_API_KEY", "")
-     st.write(f"🔑 OpenRouter API: {'✅' if openrouter_key else '❌'}")
-     # Estado de conectividad (simple: si hay clave, se asume OK)
-     st.write(f"🌐 Conectividad IA: {'✅' if openrouter_key else '❌'}")
-     # Dataset activo
-     from src.streamlit_utils.session_state import get_session
-     session = get_session()
-     dataset = session.dataset_name or 'Ninguno'
-     st.write(f"📁 Dataset activo: {dataset}")
-     st.markdown("---")
-     st.success("Usa el menu de paginas de Streamlit (izquierda) para navegar.")
 from dotenv import load_dotenv
 
 from src.streamlit_utils.session_state import get_session
@@ -44,22 +29,19 @@ session = get_session()
 st.session_state.setdefault("navigation", "Waveform Viewer")
 
 
-# --- Panel de salud simple ---
+# --- Panel de salud simple (único) ---
 with st.sidebar:
     st.markdown("---")
     st.subheader("🩺 Panel de Salud")
-    # Estado de claves API
     openrouter_key = st.session_state.get("openrouter_api_key") or os.getenv("OPENROUTER_API_KEY", "")
     st.write(f"🔑 OpenRouter API: {'✅' if openrouter_key else '❌'}")
-    # Estado de conectividad (simple: si hay clave, se asume OK)
     st.write(f"🌐 Conectividad IA: {'✅' if openrouter_key else '❌'}")
-    # Dataset activo
     from src.streamlit_utils.session_state import get_session
     session = get_session()
     dataset = session.dataset_name or 'Ninguno'
     st.write(f"📁 Dataset activo: {dataset}")
     st.markdown("---")
-    st.success("Usa el menu de paginas de Streamlit (izquierda) para navegar.")
+    st.success("Usa el menú de páginas de Streamlit (izquierda) para navegar.")
 
 
 # Densidad de UI global
@@ -85,8 +67,8 @@ st.markdown(
 )
 
 st.info(
-    "Configuration files are located in `config/`. Adjust `agno_config.yaml` to fine-tune "
-    "the agent model selection strategy."
+    "Configuration files are located in `config/`. Adjust `agents_config.yaml` to define and tune "
+    "the AI agent suite used by the app."
 )
 
 # OpenRouter API key setup
@@ -121,3 +103,8 @@ if os.getenv("OPENROUTER_API_KEY"):
     st.success("OpenRouter API key detected - AI agent features ready.")
 else:
     st.warning("Add API keys to `.env` to unlock full AI capabilities.")
+
+
+def main():  # minimal entry point for tests
+    """No-op main used for smoke tests to ensure module structure is sound."""
+    return True

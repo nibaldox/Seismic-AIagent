@@ -9,18 +9,9 @@ from typing import Any, Dict, List
 import requests
 
 from src.utils.logger import setup_logger
+from .base import Tool
 
 LOGGER = setup_logger(__name__)
-
-
-class Tool:
-    """Lightweight base class matching Agno's Tool interface."""
-
-    name: str = "tool"
-    description: str = ""
-
-    def run(self, *args, **kwargs):  # pragma: no cover - interface placeholder
-        raise NotImplementedError
 
 
 @dataclass
