@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Optional, List
+from uuid import uuid4
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -15,6 +16,18 @@ from src.visualization.spectrum_plots import (
     create_fft_plot,
     create_psd_plot,
 )
+from src.ai_agent.seismic_interpreter import (
+    load_agent_suite,
+    run_spectrum_analysis,
+)
+from src.core.location.one_d_location import (
+    locate_event_1d,
+    Station as OneDStation,
+    PSObservation as OneDPSObservation,
+    OneDVelocityModel,
+)
+import plotly.graph_objects as go
+import pandas as pd
 
 app = FastAPI(title="Seismic Backend", version="0.1.0")
 
@@ -50,7 +63,8 @@ async def waveform_plot(
 ):
     tmp = Path("./uploaded_files")
     tmp.mkdir(exist_ok=True)
-    save_path = tmp / file.filename
+    fname = file.filename or f"upload_{uuid4().hex}"
+    save_path = tmp / fname
     content = await file.read()
     save_path.write_bytes(content)
 
@@ -100,7 +114,8 @@ async def spectrum_plot(
 ):
     tmp = Path("./uploaded_files")
     tmp.mkdir(exist_ok=True)
-    save_path = tmp / file.filename
+    fname = file.filename or f"upload_{uuid4().hex}"
+    save_path = tmp / fname
     content = await file.read()
     save_path.write_bytes(content)
 
@@ -118,3 +133,127 @@ async def spectrum_plot(
     png_bytes = fig.to_image(format="png", scale=2)
     b64 = base64.b64encode(png_bytes).decode("ascii")
     return {"image_base64": b64, "summary": loaded.summary}
+
+
+# ---------------------- Telemetry / Histogramas ----------------------
+@app.post("/telemetry/histogram")
+async def telemetry_histogram(
+    file: UploadFile = File(...),
+    column: Optional[str] = Form(None),
+    bins: int = Form(50),
+):
+    """Crea un histograma de una columna numérica de un CSV subido."""
+    tmp = Path("./uploaded_files"); tmp.mkdir(exist_ok=True)
+    fname = file.filename or f"telemetry_{uuid4().hex}.csv"
+    path = tmp / fname
+    path.write_bytes(await file.read())
+
+    df = pd.read_csv(path)
+    # Elegir primera columna numérica si no se especifica
+    if column is None or column not in df.columns:
+        num_cols = df.select_dtypes(include=["number"]).columns.tolist()
+        if not num_cols:
+            return {"error": "No hay columnas numéricas en el CSV"}
+        column = num_cols[0]
+
+    series = pd.to_numeric(df[column], errors="coerce").dropna()
+    fig = go.Figure(data=go.Histogram(x=series, nbinsx=bins))
+    fig.update_layout(
+        title=f"Histograma · {column}", xaxis_title=column, yaxis_title="Cuenta",
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    )
+    png = fig.to_image(format="png", scale=2)
+    desc = df.describe(include="all").to_string()
+    return {"image_base64": base64.b64encode(png).decode("ascii"), "summary": desc}
+
+
+# ---------------------- Localización 1D ----------------------
+class StationIn(BaseModel):
+    code: str
+    x_km: Optional[float] = None
+    y_km: Optional[float] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+
+class ObservationIn(BaseModel):
+    station: str
+    t_p: float
+    t_s: float
+
+
+class VelocityModelIn(BaseModel):
+    vp: float = 6.0
+    vs: float = 3.5
+
+
+class GridIn(BaseModel):
+    x: List[float] = [-50, 50, 2.0]
+    y: List[float] = [-50, 50, 2.0]
+
+
+class Location1DRequest(BaseModel):
+    stations: List[StationIn]
+    observations: List[ObservationIn]
+    model: VelocityModelIn = VelocityModelIn()
+    grid: GridIn = GridIn()
+    min_stations: int = 2
+
+
+@app.post("/location/one_d")
+async def location_one_d(req: Location1DRequest):
+    stations: List[OneDStation] = []
+    # Usar XY si están disponibles, sino rechazar (o aquí podríamos proyectar si se proporciona ref)
+    for s in req.stations:
+        if s.x_km is not None and s.y_km is not None:
+            stations.append(OneDStation(code=s.code, x=float(s.x_km), y=float(s.y_km)))
+        else:
+            return {"error": f"Falta x_km/y_km para la estación {s.code}"}
+
+    observations: List[OneDPSObservation] = [
+        OneDPSObservation(station=o.station, t_p=o.t_p, t_s=o.t_s) for o in req.observations
+    ]
+    model = OneDVelocityModel(vp=req.model.vp, vs=req.model.vs)
+    gx = tuple(req.grid.x); gy = tuple(req.grid.y)
+
+    res = locate_event_1d(
+        stations=stations,
+        observations=observations,
+        model=model,
+        grid_x=(float(gx[0]), float(gx[1]), float(gx[2])),
+        grid_y=(float(gy[0]), float(gy[1]), float(gy[2])),
+        min_stations=req.min_stations,
+    )
+    if res is None:
+        return {"message": "Localización no resuelta"}
+    return {
+        "x_km": res.x,
+        "y_km": res.y,
+        "t0": res.t0,
+        "rms": res.rms,
+        "used_stations": res.used_stations,
+        "residuals": [[st, val] for st, val in res.residuals],
+    }
+
+
+# ---------------------- AI: análisis espectral ----------------------
+class AISpectrumRequest(BaseModel):
+    trace_info: dict
+    analysis_type: str
+    analysis_params: dict
+
+
+@app.post("/ai/spectrum")
+async def ai_spectrum(req: AISpectrumRequest):
+    try:
+        agents = load_agent_suite("config/agents_config.yaml")
+        content = run_spectrum_analysis(
+            agents,
+            trace_info=req.trace_info,
+            analysis_type=req.analysis_type,
+            analysis_params=req.analysis_params,
+        )
+        return {"markdown": content}
+    except Exception as exc:
+        return {"error": str(exc)}
