@@ -1,0 +1,24 @@
+[project]
+name = "seismic-backend"
+version = "0.1.0"
+description = "Seismic AI Backend (FastAPI)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn[standard]",
+  "pydantic>=2",
+  "python-dotenv",
+  "obspy",
+  "numpy",
+  "scipy",
+  "pandas",
+  "plotly",
+  "kaleido",
+]
+
+[tool.uvicorn]
+factory = false
+host = "0.0.0.0"
+port = 8000
+log_level = "info"
