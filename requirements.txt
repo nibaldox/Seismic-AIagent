@@ -34,3 +34,4 @@ pyinstaller
 reflex
 uvicorn
 starlette
+kaleido
