@@ -47,9 +47,9 @@ Convención: [ ] pendiente · [x] completado · [~] en curso
 13. [x] Correlación catálogo ↔ picks
     - [x] Función en `src/ai_agent/earthquake_search.py` para matching temporal
     - [x] Parámetros de ventana configurables y resumen en Markdown
-14. [ ] ML‑WA con respuesta instrumental
-    - [ ] Incorporar respuesta del sensor en `src/core/magnitude.py`
-    - [ ] Advertencias/metadatos en UI (limitaciones y supuestos)
+14. [x] ML‑WA con respuesta instrumental
+    - [x] Incorporar respuesta del sensor en `src/core/magnitude.py`
+    - [x] Advertencias/metadatos en UI (limitaciones y supuestos)
 15. [ ] Localización 3D (MVP)
     - [ ] Crear `src/core/location/three_d_location.py` (grid o inversión simple)
     - [ ] Integración mínima en UI (página Location)

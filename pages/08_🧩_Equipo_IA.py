@@ -115,7 +115,15 @@ def main() -> None:
 
     if st.button("🚀 Ejecutar equipo"):
         import time
-        agents = load_agent_suite()
+        
+        try:
+            agents = load_agent_suite()
+            if not agents:
+                st.error("❌ No se pudieron cargar los agentes IA. Verifica la configuración en config/agno_config.yaml")
+                return
+        except Exception as e:
+            st.error(f"❌ Error al cargar agentes IA: {e}")
+            return
 
         # Build context
         telemetry_ctx = {
@@ -222,7 +230,8 @@ def main() -> None:
                             timestamp = step.get("timestamp", 0)
                             event_type = step.get("event_type", "unknown")
                             agent = step.get("agent", "Sistema")
-                            content_preview = step.get("content", "")[:100] + "..." if len(step.get("content", "")) > 100 else step.get("content", "")
+                            content = step.get("content") or ""
+                            content_preview = content[:100] + "..." if len(content) > 100 else content
                             st.markdown(f"**{i+1}.** `{event_type}` - {agent}: {content_preview}")
 
                 st.subheader("📋 Informe Consolidado")

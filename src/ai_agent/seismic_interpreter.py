@@ -74,70 +74,100 @@ class TeamSeismicAnalysis:
         if Team is None:  # pragma: no cover
             raise ImportError("Agno Team is not available. Install with `pip install agno[team]`.")
 
+        # Validate agents dictionary
+        if not agents:
+            raise ValueError("Agents dictionary is empty")
+        
+        # Filter out None agents
+        valid_agents = {k: v for k, v in agents.items() if v is not None}
+        if not valid_agents:
+            raise ValueError("No valid (non-None) agents found in dictionary")
+        
+        if len(valid_agents) != len(agents):
+            invalid_keys = [k for k, v in agents.items() if v is None]
+            LOGGER.warning("Filtered out None agents: %s", invalid_keys)
+
         # Define team member roles and their responsibilities
         team_members = []
         member_instructions = {}
 
         # Telemetry/Histogram Analysis Agent
-        telemetry_agent = agents.get("telemetry_analysis") or agents.get("histogram_analysis")
+        telemetry_agent = valid_agents.get("telemetry_analysis") or valid_agents.get("histogram_analysis")
         if telemetry_agent:
             team_members.append(telemetry_agent)
             member_instructions[telemetry_agent.name] = [
-                "Especialista en analisis de telemetria e histogramas",
-                "Detecta tendencias, anomalias y correlaciones en series temporales",
-                "Proporciona analisis tecnico con niveles de confianza",
-                "Explica hallazgos de manera sencilla para usuarios no tecnicos"
+                "Analista de telemetria operativo",
+                "Detecta patrones, anomalias y estado del equipo en datos de telemetria",
+                "Proporciona interpretacion concisa con recomendaciones practicas",
+                "Incluye nivel de confianza del analisis"
             ]
 
         # Waveform Analysis Agent
-        waveform_agent = agents.get("waveform_analysis")
+        waveform_agent = valid_agents.get("waveform_analysis")
         if waveform_agent:
             team_members.append(waveform_agent)
             member_instructions[waveform_agent.name] = [
-                "Especialista en analisis de formas de onda sismicas",
-                "Caracteriza senales, identifica fases P/S y eventos sismicos",
-                "Evalua calidad de las senales y posibles contaminaciones",
-                "Proporciona mediciones tecnicas con incertidumbre"
+                "Interprete de formas de onda operativo",
+                "Identifica tipo de actividad sismica y calidad de senales",
+                "Proporciona interpretacion directa sin jerga tecnica compleja",
+                "Incluye recomendaciones practicas para personal operativo"
             ]
 
         # Earthquake Search Agent
-        eq_agent = agents.get("earthquake_search")
+        eq_agent = valid_agents.get("earthquake_search")
         if eq_agent:
             team_members.append(eq_agent)
             member_instructions[eq_agent.name] = [
-                "Especialista en busqueda y analisis de catalogos sismicos",
-                "Consulta bases de datos de sismicidad historica (USGS, EMSC)",
-                "Identifica eventos relevantes en el area de estudio",
-                "Evalua contexto sismico regional y posibles correlaciones"
+                "Especialista en catalogos sismicos operativo",
+                "Consulta bases de datos para contexto regional de eventos",
+                "Identifica correlaciones entre detecciones locales y sismicidad regional",
+                "Proporciona contexto sismico relevante para toma de decisiones"
             ]
 
         # Quality Assurance/Critic Agent
-        critic_agent = agents.get("critic_qa") or agents.get("quality_assurance")
+        critic_agent = valid_agents.get("critic_qa") or valid_agents.get("quality_assurance")
         if critic_agent:
             team_members.append(critic_agent)
             member_instructions[critic_agent.name] = [
-                "Auditor critico de calidad y consistencia",
-                "Revisa analisis de otros agentes por contradicciones",
-                "Identifica datos faltantes o interpretaciones debiles",
-                "Propone clarificaciones y analisis adicionales"
+                "Auditor de consistencia operativo",
+                "Revisa analisis por contradicciones y datos faltantes",
+                "Identifica aspectos que requieren clarificacion adicional",
+                "Propone validaciones cruzadas entre diferentes analisis"
             ]
 
         # Report Generation Agent
-        reporter_agent = agents.get("reporter") or agents.get("report_generation")
+        reporter_agent = valid_agents.get("reporter") or valid_agents.get("report_generation")
         if reporter_agent:
             team_members.append(reporter_agent)
             member_instructions[reporter_agent.name] = [
-                "Sintetizador final de informes tecnicos",
-                "Integra hallazgos de todos los agentes en reporte coherente",
-                "Estructura informacion tecnica con explicaciones sencillas",
-                "Proporciona recomendaciones practicas basadas en evidencia"
+                "Sintetizador de informes operativos",
+                "Integra hallazgos en reporte coherente y conciso",
+                "Estructura informacion operativa con recomendaciones claras",
+                "Proporciona conclusiones practicas basadas en evidencia"
             ]
+
+        # Validate that we have at least one team member
+        if not team_members:
+            LOGGER.warning("No team members found in agent dictionary. Available agents: %s", list(valid_agents.keys()))
+            # Use any available agent as a fallback
+            fallback_agents = [valid_agents.get("waveform_analysis"), valid_agents.get("histogram_analysis")]
+            fallback_agent = next((agent for agent in fallback_agents if agent), None)
+            if fallback_agent:
+                team_members.append(fallback_agent)
+                member_instructions[fallback_agent.name] = [
+                    "Analista general sismologico",
+                    "Proporciona analisis operativo conciso y recomendaciones practicas"
+                ]
+            else:
+                raise ValueError("No suitable agents found for team formation")
 
         self.team = Team(
             name="Equipo de Analisis Sismico",
-            mode="collaborate",
             description="Equipo multi-agente especializado en analisis integral de datos sismicos",
             members=team_members,
+            respond_directly=False,  # El líder procesa las respuestas de los miembros
+            delegate_task_to_all_members=False,  # Delegación uno por uno para flujo estructurado
+            determine_input_for_members=True,  # El líder sintetiza entradas específicas
             instructions=[
                 "Coordina el analisis sismico siguiendo este flujo estructurado:",
                 "1. Analisis de telemetria/histogramas para detectar anomalias",
@@ -147,17 +177,15 @@ class TeamSeismicAnalysis:
                 "5. Revision critica QA de hallazgos",
                 "6. Sintesis final del reporte",
                 "",
-                "Cada agente debe proporcionar analisis tecnico con niveles de confianza",
-                "y explicaciones sencillas en espanol para usuarios no tecnicos.",
+                "Cada agente debe proporcionar analisis operativo conciso en espanol",
+                "con nivel de confianza y recomendaciones practicas.",
                 "Manten consistencia factual y evita contradicciones entre analisis."
             ] + [
                 f"Agente {agent.name}: {member_instructions.get(agent.name, ['Sin instrucciones especificas'])[0]}"
                 for agent in team_members
             ],
-            expected_output="Informe completo en markdown con hallazgos tecnicos, explicaciones sencillas y recomendaciones practicas",
-            show_tool_calls=True,
+            expected_output="Informe completo en markdown con hallazgos operativos, explicaciones claras y recomendaciones practicas",
             markdown=True,
-            debug_mode=False,
         )
 
     def analyze(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -169,8 +197,29 @@ class TeamSeismicAnalysis:
         Returns:
             Dict with markdown report and analysis metadata
         """
+        # Validate team initialization
+        if not self.team:
+            LOGGER.error("Team not initialized properly")
+            return {
+                "markdown": "Error: Equipo de análisis no inicializado",
+                "error": "Team not initialized",
+                "duration": 0,
+                "team_mode": "error",
+                "fallback_failed": True,
+            }
+        
         # Build comprehensive prompt from context
         prompt = self._build_analysis_prompt(context)
+        
+        if not prompt:
+            LOGGER.error("Failed to build analysis prompt")
+            return {
+                "markdown": "Error: No se pudo construir el prompt de análisis",
+                "error": "Empty prompt",
+                "duration": 0,
+                "team_mode": "error",
+                "fallback_failed": True,
+            }
 
         # Execute team analysis with advanced streaming
         start_time = time.time()
@@ -182,14 +231,15 @@ class TeamSeismicAnalysis:
         try:
             # Run with streaming to capture intermediate steps
             for event in self.team.run(prompt, stream=True):
-                streaming_events.append({
-                    "timestamp": time.time(),
-                    "event_type": getattr(event, "event_type", "unknown"),
-                    "content": getattr(event, "content", str(event)),
-                    "agent": getattr(event, "agent", None),
-                    "step": getattr(event, "step", None),
-                })
-                LOGGER.debug(f"Team event: {event}")
+                if event is not None:
+                    streaming_events.append({
+                        "timestamp": time.time(),
+                        "event_type": getattr(event, "event_type", "unknown"),
+                        "content": getattr(event, "content", str(event)),
+                        "agent": getattr(event, "agent", None),
+                        "step": getattr(event, "step", None),
+                    })
+                    LOGGER.debug(f"Team event: {event}")
 
             # Get final result
             final_result = self.team.run(prompt, stream=False)
@@ -216,15 +266,15 @@ class TeamSeismicAnalysis:
         LOGGER.info(f"Team analysis response time: {duration:.2f}s, Average: {avg_time:.2f}s" if avg_time else f"Team analysis response time: {duration:.2f}s")
 
         # Extract content and build response
-        content = getattr(final_result, "content", str(final_result))
+        content = getattr(final_result, "content", str(final_result)) if final_result else "Error: No se recibió resultado del equipo"
 
         return {
             "markdown": content,
             "team_mode": "coordinate",
             "duration": duration,
-            "agent_count": len(self.team.members),
-            "streaming_events": len(streaming_events),
-            "intermediate_steps": streaming_events,
+            "agent_count": len(self.team.members) if self.team and hasattr(self.team, 'members') and self.team.members else 0,
+            "streaming_events": len(streaming_events) if streaming_events else 0,
+            "intermediate_steps": streaming_events or [],
         }
 
     def _build_analysis_prompt(self, context: Dict[str, Any]) -> str:
@@ -282,19 +332,20 @@ class TeamSeismicAnalysis:
 
         prompt_parts.extend([
             "## Instrucciones de Analisis:",
-            "1. **Analisis de Telemetria**: Detecta tendencias, anomalias y correlaciones",
-            "2. **Analisis de Ondas**: Caracteriza senales sismicas y eventos",
-            "3. **Catalogo Sismico**: Busca eventos historicos relevantes",
-            "4. **Localizacion**: Estima epicentro si hay suficientes datos",
-            "5. **Revision Critica**: Identifica contradicciones o datos faltantes",
-            "6. **Sintesis Final**: Integra todos los hallazgos coherentemente",
+            "1. **Analisis de Telemetria**: Detecta patrones y anomalias, estado del equipo",
+            "2. **Analisis de Ondas**: Identifica tipo de actividad sismica y calidad de senales",
+            "3. **Catalogo Sismico**: Busca contexto regional de eventos relevantes",
+            "4. **Localizacion**: Estima epicentro si hay datos suficientes",
+            "5. **Revision Critica**: Identifica contradicciones o validaciones necesarias",
+            "6. **Sintesis Final**: Integra hallazgos en reporte coherente y conciso",
             "",
             "## Formato de Salida:",
-            "- **Resumen Tecnico**: Hallazgos estructurados con niveles de confianza",
-            "- **Explicacion Sencilla**: 2-3 acciones practicas para no tecnicos",
-            "- **Recomendaciones**: Proximos pasos basados en evidencia",
+            "- **Interpretacion operativa directa** sobre actividad detectada",
+            "- **Estado de normalidad** y si requiere atencion",
+            "- **Recomendaciones practicas** (2-3 acciones especificas)",
+            "- **Nivel de confianza** del analisis integral",
             "",
-            "Responde en espanol. Manten consistencia factual entre analisis."
+            "Responde en espanol de forma concisa y practica para personal operativo."
         ])
 
         return "\n".join(prompt_parts)
@@ -448,11 +499,13 @@ def load_agent_suite(config_path: str = "agents_config.yaml") -> Dict[str, "Agno
     # Merge configurations: use agent config for task_models, model config for everything else
     seismic = {**model_seismic, **agent_seismic}
 
-    _configure_cache(seismic.get("cache"))
-    _configure_monitoring(seismic.get("monitoring"))
+    _configure_cache(seismic.get("cache") or {})
+    _configure_monitoring(seismic.get("monitoring") or {})
     task_models = seismic.get("task_models", {})
 
     agents: Dict[str, "AgnoAgent"] = {}
+    failed_agents = []
+    
     for task, data in task_models.items():
         provider, model_id = _resolve_task_model(seismic, data)
         default_instruction = f"Execute task: {task.replace('_', ' ')} for seismic interpretation."
@@ -470,11 +523,24 @@ def load_agent_suite(config_path: str = "agents_config.yaml") -> Dict[str, "Agno
         
         spec = AgentSpec(provider=provider, model_id=model_id, role=task.title().replace("_", " "), instructions=instructions)
         try:
-            agents[task] = create_agent(spec, enable_cache=_CACHE_ENABLED, expected_output=expected_output, tools=tools)
-            _monitor_event("agent_registered", task=task)
+            agent = create_agent(spec, enable_cache=_CACHE_ENABLED, expected_output=expected_output, tools=tools)
+            if agent is not None:
+                agents[task] = agent
+                _monitor_event("agent_registered", task=task)
+            else:
+                failed_agents.append((task, "Agent creation returned None"))
+                LOGGER.warning("Agent creation returned None for task %s", task)
         except Exception as exc:  # pragma: no cover - surfacing config errors
+            failed_agents.append((task, str(exc)))
             LOGGER.error("Failed to initialize agent for task %s: %s", task, exc)
             _monitor_event("agent_error", task=task, extra={"message": str(exc)})
+    
+    if not agents:
+        LOGGER.error("No agents were successfully created. Failed agents: %s", failed_agents)
+        raise ValueError(f"Failed to create any agents. Errors: {failed_agents}")
+    elif failed_agents:
+        LOGGER.warning("Some agents failed to initialize: %s. Available agents: %s", failed_agents, list(agents.keys()))
+    
     return agents
 
 
@@ -487,10 +553,18 @@ def run_primary_analysis(agents: Dict[str, "AgnoAgent"], summary: str) -> Option
         return None
 
     prompt = (
-        "Eres un sismologo experto.\n"
-        "Entrega: (1) un resumen tecnico breve en espanol (llegadas P/S, hipotesis, incertidumbre), y\n"
-        "(2) una explicacion sencilla para personal no tecnico (en terminos claros, sin jerga), con 2-3 acciones o recomendaciones practicas.\n\n"
-        f"Contexto de formas de onda:\n{summary}"
+        "Eres un sismologo experto especializado en interpretacion operativa de formas de onda sismicas.\n\n"
+        "INSTRUCCIONES ESPECIFICAS:\n"
+        "Proporciona una interpretacion clara y concisa para personal operativo sobre las formas de onda "
+        "detectadas. Evita jerga tecnica compleja y enfocate en la interpretacion practica.\n\n"
+        "Tu respuesta debe incluir:\n"
+        "- Que tipo de actividad sismica se detecta (evento local, regional, teleseismo, ruido)\n"
+        "- Si las senales son normales o requieren atencion inmediata\n"
+        "- 2-3 recomendaciones practicas especificas\n"
+        "- Nivel de confianza del analisis\n\n"
+        "Responde en espanol de forma directa, sin titulos como 'Resumen Tecnico' o 'Explicacion para Personal No Tecnico'.\n\n"
+        f"FORMAS DE ONDA DETECTADAS:\n{summary}\n\n"
+        "INTERPRETACION:"
     )
     _monitor_event("agent_run", task="waveform_analysis")
     start_time = time.time()
@@ -541,23 +615,25 @@ def run_histogram_analysis(
     cols_block = ", ".join(columns) if columns else "(no especificado)"
     
     prompt = (
-        "Eres un analista sismologico especializado en datos de geofonos e histogramas sismicos.\n\n"
+        "Eres un analista sismologico especializado en interpretacion operativa de datos de telemetria sismica.\n\n"
         "INSTRUCCIONES ESPECIFICAS:\n"
-        "Analyze Gecko histogram/telemetry time series: trends, anomalies, thresholds, and possible seismic/operational causes. Output must have two layers: (1) Technical summary (confidence, thresholds, correlations). (2) Plain-language explanation for non-technical staff with 2-3 actionable recommendations. Answer in Spanish.\n\n"
-        "ANALISIS REQUERIDO:\n"
-        "- Analiza UNICAMENTE los datos numericos mostrados en la tabla abajo\n"
-        "- Calcula estadisticas reales basadas en los valores proporcionados (media, maximo, minimo, etc.)\n"
-        "- Identifica tendencias y anomalias en las series temporales\n"
-        "- Evalua correlaciones entre variables sismicas (3D_Peak, N, E, Z) y operativas (Voltage, Temperature)\n"
-        "- Establece umbrales basados en los datos observados\n"
-        "- Proporciona nivel de confianza del analisis\n\n"
-        f"Archivo: {filename or '(subido)'}\n"
-        + (f"Rango de fechas: {time_range}\n" if time_range else "")
-        + (f"Metadatos:\n{meta_block}\n\n" if meta_block else "")
-        + f"Columnas visualizadas: {cols_block}\n\n"
-        + (f"Contexto/ajustes de visualizacion: {notes}\n\n" if notes else "")
-        + "DATOS PARA ANALIZAR (usar estos valores exactos para calculos):\n"
-        + df_head
+        "Proporciona una interpretacion clara y concisa para personal operativo sobre los datos de telemetria. "
+        "Evita jerga tecnica compleja y enfocate en la interpretacion practica de tendencias y anomalias.\n\n"
+        "Tu respuesta debe incluir:\n"
+        "- Que patron o tendencia muestran los datos sismicos\n"
+        "- Si hay anomalias que requieren atencion\n"
+        "- Estado del equipo y calidad de los datos\n"
+        "- 2-3 recomendaciones practicas especificas\n"
+        "- Nivel de confianza del analisis\n\n"
+        "Responde en espanol de forma directa, sin titulos como 'Resumen Tecnico' o 'Explicacion para Personal No Tecnico'.\n\n"
+        f"ARCHIVO: {filename or '(subido)'}\n"
+        + (f"PERIODO: {time_range}\n" if time_range else "")
+        + (f"METADATOS: {meta_block}\n\n" if meta_block else "")
+        + f"VARIABLES ANALIZADAS: {cols_block}\n\n"
+        + (f"CONFIGURACION: {notes}\n\n" if notes else "")
+        + "DATOS NUMERICOS PARA ANALIZAR:\n"
+        + df_head + "\n\n"
+        + "INTERPRETACION:"
     )
     _monitor_event("agent_run", task="histogram_analysis")
     start_time = time.time()
@@ -581,6 +657,74 @@ def run_histogram_analysis(
     LOGGER.info(f"Histogram agent response time: {duration:.2f}s, Average: {avg_time:.2f}s" if avg_time else f"Histogram agent response time: {duration:.2f}s")
     
     _monitor_event("agent_run_complete", task="histogram_analysis")
+    return getattr(result, "content", None)
+
+
+def run_spectrum_analysis(
+    agents: Dict[str, "AgnoAgent"],
+    *,
+    trace_info: Dict[str, Any],
+    analysis_type: str,
+    analysis_params: Dict[str, Any],
+) -> Optional[str]:
+    """Run spectral analysis interpretation using AI agent.
+    
+    Args:
+        agents: Dictionary of configured AI agents
+        trace_info: Information about the analyzed trace (station, channel, sampling rate, etc.)
+        analysis_type: Type of spectral analysis ("Espectrograma", "FFT", "Densidad Espectral (PSD)")
+        analysis_params: Parameters used for the analysis (nfft, overlap, frequency limits, etc.)
+    """
+    agent = agents.get("spectrum_analysis") or agents.get("waveform_analysis")
+    if agent is None:
+        LOGGER.warning("Spectrum analysis agent not configured.")
+        return None
+
+    # Build context about the trace and analysis
+    trace_context = []
+    for key, value in trace_info.items():
+        trace_context.append(f"- {key}: {value}")
+    trace_block = "\n".join(trace_context)
+    
+    # Build parameters context
+    params_context = []
+    for key, value in analysis_params.items():
+        params_context.append(f"- {key}: {value}")
+    params_block = "\n".join(params_context)
+    
+    prompt = (
+        "Eres un sismologo especializado en analisis espectral de senales sismicas.\n\n"
+        "INSTRUCCIONES ESPECIFICAS:\n"
+        "Proporciona una explicacion clara y concisa para personal operativo sobre lo que muestra el "
+        "analisis espectral. Evita jerga tecnica compleja y enfocate en la interpretacion practica.\n\n"
+        "Tu respuesta debe incluir:\n"
+        "- Que tipo de actividad sismica se detecta (evento local, regional, ruido, etc.)\n"
+        "- Si la senal es normal o requiere atencion\n"
+        "- 2-3 recomendaciones practicas especificas\n"
+        "- Nivel de confianza del analisis\n\n"
+        "Responde en espanol de forma directa, sin titulos como 'Explicacion para Personal No Tecnico'.\n\n"
+        f"TIPO DE ANALISIS: {analysis_type}\n\n"
+        f"INFORMACION DE LA TRAZA:\n{trace_block}\n\n"
+        f"PARAMETROS DEL ANALISIS:\n{params_block}\n\n"
+        "INTERPRETACION:"
+    )
+
+    _monitor_event("agent_run", task="spectrum_analysis")
+    start_time = time.time()
+    try:
+        result = agent.run(prompt)
+    except Exception as exc:  # pragma: no cover - agent execution error
+        LOGGER.error("Spectrum analysis agent failed: %s", exc)
+        _monitor_event("agent_run_failed", task="spectrum_analysis", extra={"message": str(exc)})
+        return None
+    
+    duration = time.time() - start_time
+    record_agent_time(duration)
+    avg_time = get_average_response_time()
+    
+    LOGGER.info(f"Spectrum agent response time: {duration:.2f}s, Average: {avg_time:.2f}s" if avg_time else f"Spectrum agent response time: {duration:.2f}s")
+    
+    _monitor_event("agent_run_complete", task="spectrum_analysis")
     return getattr(result, "content", None)
 
 

@@ -16,7 +16,7 @@ from src.streamlit_utils.session_state import get_session, set_team_telemetry_co
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 
-st.set_page_config(page_title="Histogramas Gecko", page_icon="📈")
+st.set_page_config(page_title="Series Temporales Gecko", page_icon="📈")
 
 
 def _get_agent_suite():
@@ -91,11 +91,14 @@ def _render_histogram_ai_panel(*, container, key_prefix: str, filename: str | No
 
 
 def _find_histogram_files(base: Path) -> list[Path]:
+    """Find CSV/Excel files in data directories."""
     patterns = [
         "**/Histograma/**/*.csv",
         "**/Histograma/**/*.txt",
-        "**/histograma/**/*.csv",
+        "**/histograma/**/*.csv", 
         "**/histograma/**/*.txt",
+        "**/*.csv",  # Also search for any CSV files
+        "**/*.xlsx", # And Excel files
     ]
     files: list[Path] = []
     for pat in patterns:
@@ -155,80 +158,10 @@ def _ensure_datetime(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _detect_histogram_columns(df: pd.DataFrame) -> Tuple[Optional[str], Optional[str]]:
-    cols = [c for c in df.columns]
-    lower = {c: str(c).strip().lower() for c in cols}
-    # Common names
-    bin_candidates = [
-        c for c in cols if lower[c] in {"bin", "bins", "value", "val", "amplitude", "x"}
-    ]
-    count_candidates = [
-        c for c in cols if lower[c] in {"count", "counts", "n", "freq", "frequency", "y"}
-    ]
-    # If both found, return first pair
-    if bin_candidates and count_candidates:
-        return bin_candidates[0], count_candidates[0]
-    # If exactly two numeric columns, assume first is bin and second is count
-    num_cols = [c for c in cols if pd.api.types.is_numeric_dtype(df[c])]
-    if len(num_cols) == 2:
-        return num_cols[0], num_cols[1]
-    return None, None
-
-
-def _plot_aggregated_histogram(df: pd.DataFrame, bin_col: str, count_col: str, *, logy: bool, normalize: bool, cumulative: bool) -> go.Figure:
-    x = df[bin_col].to_numpy()
-    y = df[count_col].to_numpy(dtype=float)
-    if normalize and y.sum() > 0:
-        y = y / y.sum()
-    if cumulative:
-        y = np.cumsum(y)
-        if normalize and y[-1] != 0:
-            y = y / y[-1]
-    fig = go.Figure(
-        data=[go.Bar(x=x, y=y, marker_color="#74b9ff")]
-    )
-    fig.update_layout(
-        template="plotly_dark",
-        xaxis_title=str(bin_col),
-        yaxis_title=("Prob." if normalize else ("Cuentas" if not cumulative else "Cumul.")),
-        bargap=0.05,
-        hovermode="x unified",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=40, r=20, b=60, l=70),
-    )
-    fig.update_yaxes(type="log" if logy else "linear")
-    return fig
-
-
-def _plot_raw_histogram(series: pd.Series, *, bins: int, logy: bool, normalize: bool, cumulative: bool) -> go.Figure:
-    data = series.dropna().to_numpy()
-    counts, edges = np.histogram(data, bins=bins)
-    if normalize and counts.sum() > 0:
-        counts = counts / counts.sum()
-    if cumulative:
-        counts = np.cumsum(counts)
-        if normalize and counts[-1] != 0:
-            counts = counts / counts[-1]
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    fig = go.Figure(data=[go.Bar(x=centers, y=counts, marker_color="#55efc4")])
-    fig.update_layout(
-        template="plotly_dark",
-        xaxis_title=series.name or "valor",
-        yaxis_title=("Prob." if normalize else ("Cuentas" if not cumulative else "Cumul.")),
-        bargap=0.05,
-        hovermode="x unified",
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=40, r=20, b=60, l=70),
-    )
-    fig.update_yaxes(type="log" if logy else "linear")
-    return fig
-
 
 def main():
-    st.title("📈 Histogramas Gecko")
-    st.caption("Carga un archivo de histograma exportado por Gecko o construye un histograma desde datos crudos.")
+    st.title("📈 Series Temporales Gecko")
+    st.caption("Carga un archivo CSV/Excel de Gecko y visualiza las series temporales de telemetría.")
 
     # Intentar recuperar datos del estado de sesión
     df, meta, filename = get_histogram_data()
@@ -287,321 +220,184 @@ def main():
         st.info("Selecciona o sube un archivo para continuar.")
         return
 
-    st.success(f"Cargado: {filename} | {df.shape[0]} filas, {df.shape[1]} columnas")
-    with st.expander("Vista previa"):
-        st.dataframe(df.head(50))
-    if meta:
-        with st.expander("Metadatos Gecko"):
-            left, right = st.columns(2)
-            for i, (k, v) in enumerate(meta.items()):
-                (left if i % 2 == 0 else right).write(f"**{k}:** {v}")
+    st.success(f"📊 **{filename}** | {df.shape[0]} filas, {df.shape[1]} columnas")
+    
+    # Expandibles compactos para información adicional
+    info_cols = st.columns(2)
+    with info_cols[0]:
+        with st.expander("Vista previa datos", expanded=False):
+            st.dataframe(df.head(50))
+    with info_cols[1]:
+        if meta:
+            with st.expander("Metadatos Gecko", expanded=False):
+                for k, v in meta.items():
+                    st.write(f"**{k}:** {v}")
 
-    st.subheader("Visualización")
-    viz_mode = st.radio("Modo de gráfico", ["Serie temporal (X = fecha)", "Histograma"])
+    st.markdown("---")  # Separador visual
+    st.subheader("📈 Series Temporales")
 
+    # Verificar datos requeridos
+    if "datetime" not in df.columns:
+        st.error("No se encontró columna 'datetime' en el archivo para usar como eje X.")
+        st.stop()
+    num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    if not num_cols:
+        st.error("No hay columnas numéricas para graficar.")
+        st.stop()
 
-    if viz_mode == "Serie temporal (X = fecha)":
-        if "datetime" not in df.columns:
-            st.error("No se encontro columna 'datetime' en el archivo para usar como eje X.")
-            st.stop()
-        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-        if not num_cols:
-            st.error("No hay columnas numericas para graficar.")
-            st.stop()
-
-        ctrl_left, ctrl_right = st.columns(2)
-        with ctrl_left:
-            resample = st.selectbox(
-                "Resampleo",
-                options=["Sin resampleo", "15Min", "1H", "6H", "1D"],
-                index=0,
-                help="Agrega los datos por ventana de tiempo",
-            )
-        with ctrl_right:
-            agg = st.selectbox("Agregacion", options=["mean", "max", "min"], index=1)
-
+    # Controles compactos en fila horizontal
+    ctrl_cols = st.columns([2, 2, 2, 3])
+    with ctrl_cols[0]:
+        resample = st.selectbox(
+            "Resampleo",
+            options=["Sin resampleo", "15Min", "1H", "6H", "1D"],
+            index=0,
+            help="Agrega los datos por ventana de tiempo",
+        )
+    with ctrl_cols[1]:
+        agg = st.selectbox("Agregación", options=["mean", "max", "min"], index=1)
+    with ctrl_cols[2]:
         smooth = st.checkbox("Suavizar (rolling)", value=False)
+    with ctrl_cols[3]:
         if smooth:
-            win = st.slider("Ventana rolling (muestras)", min_value=3, max_value=301, value=21, step=2)
+            win = st.slider("Ventana rolling", min_value=3, max_value=301, value=21, step=2)
         else:
             win = None
+            st.write("")  # Espaciador
 
-        defaults = ["3D peak", "Max_E g", "Max_N g", "Max_Z g"]
-        picks: List[str] = []
-        for idx in range(4):
-            default_col = defaults[idx] if idx < len(defaults) and defaults[idx] in num_cols else num_cols[0]
+    defaults = ["3D peak", "Max_E g", "Max_N g", "Max_Z g"]
+    
+    # Selección de variables en fila horizontal (compacto)
+    st.markdown("**Variables a graficar:**")
+    var_cols = st.columns(4)
+    picks: List[str] = []
+    for idx in range(4):
+        default_col = defaults[idx] if idx < len(defaults) and defaults[idx] in num_cols else num_cols[0]
+        with var_cols[idx]:
             picks.append(
                 st.selectbox(
-                    f"Variable grafico {idx + 1}",
+                    f"Gráfico {idx + 1}",
                     options=num_cols,
                     index=num_cols.index(default_col),
                     key=f"ts_var_{idx + 1}",
                 )
             )
 
-        def _compute_xy(dataframe: pd.DataFrame, column: str) -> tuple[np.ndarray, np.ndarray]:
-            dft = dataframe.dropna(subset=["datetime"]).copy()
-            if resample != "Sin resampleo":
-                dft = dft.set_index("datetime")
-                try:
-                    series = getattr(dft[column].resample(resample), agg)()
-                except Exception:
-                    series = dft[column].resample("1H").mean()
-                if smooth and win:
-                    series = series.rolling(window=win, min_periods=max(3, win // 5), center=True).mean()
-                return np.asarray(series.index.to_pydatetime()), series.values.astype(float)
-            series = dft[["datetime", column]].dropna()
-            yvals = series[column].astype(float)
-            if smooth and win:
-                yvals = yvals.rolling(window=win, min_periods=max(3, win // 5), center=True).mean()
-            return series["datetime"].to_numpy(), yvals.to_numpy()
-
-        colors = ["#74b9ff", "#ff7675", "#55efc4", "#ffa726"]
-        xmins, xmaxs = [], []
-        xy_cache: Dict[str, tuple[np.ndarray, np.ndarray]] = {}
-
-        col_plot, col_ai = st.columns([3, 2])
-        with col_plot:
-            for idx, column in enumerate(picks, start=1):
-                xarr, yarr = _compute_xy(df, column)
-                xy_cache[column] = (xarr, yarr)
-                if len(xarr) > 0:
-                    xmins.append(xarr[0])
-                    xmaxs.append(xarr[-1])
-                fig = go.Figure(
-                    data=[
-                        go.Scatter(
-                            x=xarr,
-                            y=yarr,
-                            mode="lines",
-                            name=column,
-                            line=dict(color=colors[(idx - 1) % len(colors)], width=2),
-                        )
-                    ]
-                )
-                fig.update_layout(
-                    template="plotly_dark",
-                    xaxis_title="Fecha",
-                    yaxis_title=column,
-                    hovermode="x unified",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(t=30, r=20, b=40, l=70),
-                    showlegend=False,
-                )
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-        subcols = [c for c in picks if c in df.columns]
-        df_small = df[["datetime"] + subcols].dropna().head(20) if "datetime" in df.columns else df[subcols].dropna().head(20)
-        try:
-            df_head_md = df_small.to_markdown(index=False)
-        except Exception:
-            df_head_md = df_small.to_string(index=False)
-
-        time_span = None
-        if xmins and xmaxs:
+    def _compute_xy(dataframe: pd.DataFrame, column: str) -> tuple[np.ndarray, np.ndarray]:
+        dft = dataframe.dropna(subset=["datetime"]).copy()
+        if resample != "Sin resampleo":
+            dft = dft.set_index("datetime")
             try:
-                time_span = f"{min(xmins)} -> {max(xmaxs)}"
+                series = getattr(dft[column].resample(resample), agg)()
             except Exception:
-                time_span = None
-
-        def notes_builder():
-            analysis_ts = datetime.now().isoformat(timespec="seconds")
-            stat_lines = []
-            for column in subcols:
-                try:
-                    _, y = xy_cache.get(column, (np.array([]), np.array([])))
-                    y = y[np.isfinite(y)] if y is not None else np.array([])
-                    if y.size > 0:
-                        last_val = y[~np.isnan(y)][-1] if np.any(~np.isnan(y)) else y[-1]
-                        stat_lines.append(
-                            f"{column}: n={y.size}, min={np.nanmin(y):.3g}, mean={np.nanmean(y):.3g}, max={np.nanmax(y):.3g}, last={last_val:.3g}"
-                        )
-                except Exception:
-                    continue
-            stats_block = " | ".join(stat_lines)
-            base = f"resample={resample}; agg={agg}; smooth={'on' if smooth else 'off'}"
+                series = dft[column].resample("1H").mean()
             if smooth and win:
-                base += f" (win={win})"
-            base += f"; analysis_ts={analysis_ts}"
-            if stats_block:
-                base += f"; stats: {stats_block}"
-            return base
+                series = series.rolling(window=win, min_periods=max(3, win // 5), center=True).mean()
+            return np.asarray(series.index.to_numpy(), dtype='datetime64[ns]'), series.values.astype(float)
+        series = dft[["datetime", column]].dropna()
+        yvals = series[column].astype(float)
+        if smooth and win:
+            yvals = yvals.rolling(window=win, min_periods=max(3, win // 5), center=True).mean()
+        return series["datetime"].to_numpy(), yvals.to_numpy()
 
-        with col_ai:
-            col_ai.subheader("Interprete IA")
-            _render_histogram_ai_panel(
-                container=col_ai,
-                key_prefix="hist_ts",
-                filename=filename,
-                meta=meta,
-                df_head_md=df_head_md,
-                columns=subcols,
-                time_range=time_span,
-                notes_builder=notes_builder,
+    colors = ["#74b9ff", "#ff7675", "#55efc4", "#ffa726"]
+    xmins, xmaxs = [], []
+    xy_cache: Dict[str, tuple[np.ndarray, np.ndarray]] = {}
+
+    col_plot, col_ai = st.columns([3, 2])
+    with col_plot:
+        for idx, column in enumerate(picks, start=1):
+            xarr, yarr = _compute_xy(df, column)
+            xy_cache[column] = (xarr, yarr)
+            if len(xarr) > 0:
+                xmins.append(xarr[0])
+                xmaxs.append(xarr[-1])
+            fig = go.Figure(
+                data=[
+                    go.Scatter(
+                        x=xarr,
+                        y=yarr,
+                        mode="lines",
+                        name=column,
+                        line=dict(color=colors[(idx - 1) % len(colors)], width=2),
+                    )
+                ]
             )
+            fig.update_layout(
+                template="plotly_dark",
+                xaxis_title="Fecha",
+                yaxis_title=column,
+                hovermode="x unified",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                margin=dict(t=30, r=20, b=40, l=70),
+                showlegend=False,
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    subcols = [c for c in picks if c in df.columns]
+    df_small = df[["datetime"] + subcols].dropna().head(20) if "datetime" in df.columns else df[subcols].dropna().head(20)
+    try:
+        df_head_md = df_small.to_markdown(index=False)
+    except Exception:
+        df_head_md = df_small.to_string(index=False)
+
+    time_span = None
+    if xmins and xmaxs:
+        try:
+            time_span = f"{min(xmins)} -> {max(xmaxs)}"
+        except Exception:
+            time_span = None
+
+    def notes_builder():
+        analysis_ts = datetime.now().isoformat(timespec="seconds")
+        stat_lines = []
+        for column in subcols:
             try:
-                export_notes = f"resample={resample}; agg={agg}; smooth={'on' if smooth else 'off'}" + (f" (win={win})" if smooth and win else "")
-                set_team_telemetry_context(
-                    time_range=time_span,
-                    columns=subcols,
-                    df_head_md=df_head_md,
-                    notes=export_notes,
-                    meta=meta,
-                    filename=filename,
-                )
-                col_ai.caption("Contexto enviado a 'AI Equipo IA'.")
+                _, y = xy_cache.get(column, (np.array([]), np.array([])))
+                y = y[np.isfinite(y)] if y is not None else np.array([])
+                if y.size > 0:
+                    last_val = y[~np.isnan(y)][-1] if np.any(~np.isnan(y)) else y[-1]
+                    stat_lines.append(
+                        f"{column}: n={y.size}, min={np.nanmin(y):.3g}, mean={np.nanmean(y):.3g}, max={np.nanmax(y):.3g}, last={last_val:.3g}"
+                    )
             except Exception:
-                pass
-        return
+                continue
+        stats_block = " | ".join(stat_lines)
+        base = f"resample={resample}; agg={agg}; smooth={'on' if smooth else 'off'}"
+        if smooth and win:
+            base += f" (win={win})"
+        base += f"; analysis_ts={analysis_ts}"
+        if stats_block:
+            base += f"; stats: {stats_block}"
+        return base
 
-    # --- Histograma ---
-    st.subheader("Configuración de histograma")
-    logy = st.checkbox("Escala log en Y", value=False)
-    normalize = st.checkbox("Normalizar (probabilidad)", value=False)
-    cumulative = st.checkbox("Acumulado", value=False)
-
-    bin_col, count_col = _detect_histogram_columns(df)
-    aggregated = False
-    if bin_col is not None and count_col is not None:
-        aggregated = st.toggle(
-            "Interpretar como histograma ya agregado (bin + count)",
-            value=True,
-            help=f"Detectado: bin='{bin_col}', count='{count_col}'"
+    with col_ai:
+        col_ai.subheader("Interprete IA")
+        _render_histogram_ai_panel(
+            container=col_ai,
+            key_prefix="hist_ts",
+            filename=filename,
+            meta=meta,
+            df_head_md=df_head_md,
+            columns=subcols,
+            time_range=time_span,
+            notes_builder=notes_builder,
         )
-    else:
-        st.caption("No se detectaron columnas 'bin' y 'count'. Se construirá desde una columna numérica.")
-
-
-    if aggregated:
-        cols = list(df.columns)
-        bin_col = st.selectbox("Columna bin", options=cols, index=cols.index(bin_col) if bin_col in cols else 0)
-        count_col = st.selectbox("Columna count", options=cols, index=cols.index(count_col) if count_col in cols else 1)
-        fig = _plot_aggregated_histogram(df, bin_col, count_col, logy=logy, normalize=normalize, cumulative=cumulative)
-        col_plot, col_ai = st.columns([3, 2])
-        with col_plot:
-            col_plot.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        df_small = df[[bin_col, count_col]].dropna().head(20)
         try:
-            df_head_md = df_small.to_markdown(index=False)
-        except Exception:
-            df_head_md = df_small.to_string(index=False)
-        time_span = None
-        if "datetime" in df.columns:
-            try:
-                dt_clean = pd.to_datetime(df["datetime"], errors="coerce")
-                dt_min = dt_clean.min(); dt_max = dt_clean.max()
-                if pd.notna(dt_min) and pd.notna(dt_max):
-                    time_span = f"{dt_min} -> {dt_max}"
-            except Exception:
-                pass
-
-        def agg_notes():
-            analysis_ts = datetime.now().isoformat(timespec="seconds")
-            try:
-                total = float(pd.to_numeric(df[count_col], errors="coerce").fillna(0).sum())
-                idx_max = int(pd.to_numeric(df[count_col], errors="coerce").fillna(0).idxmax())
-                top_bin = df.loc[idx_max, bin_col] if 0 <= idx_max < len(df) else None
-                top_cnt = df.loc[idx_max, count_col] if 0 <= idx_max < len(df) else None
-                x = pd.to_numeric(df[bin_col], errors="coerce").fillna(0).to_numpy()
-                y = pd.to_numeric(df[count_col], errors="coerce").fillna(0).to_numpy()
-                w_mean = float((x * y).sum() / y.sum()) if y.sum() > 0 else None
-                stats = f"total={total:.3g}; top=({top_bin},{top_cnt})"
-                if w_mean is not None:
-                    stats += f"; w_mean={w_mean:.3g}"
-            except Exception:
-                stats = ""
-            base = (
-                f"histograma agregado; normalize={normalize}; cumulative={cumulative}; logy={logy}; analysis_ts={analysis_ts}"
-            )
-            if stats:
-                base += f"; {stats}"
-            return base
-
-        with col_ai:
-            col_ai.subheader("Interprete IA")
-            _render_histogram_ai_panel(
-                container=col_ai,
-                key_prefix="hist_agg",
-                filename=filename,
-                meta=meta,
-                df_head_md=df_head_md,
-                columns=[bin_col, count_col],
+            export_notes = f"resample={resample}; agg={agg}; smooth={'on' if smooth else 'off'}" + (f" (win={win})" if smooth and win else "")
+            set_team_telemetry_context(
                 time_range=time_span,
-                notes_builder=agg_notes,
-            )
-        return
-
-    else:
-        num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-        if not num_cols:
-            st.error("No hay columnas numericas para construir histograma.")
-            return
-        preferred = [
-            "3D peak",
-            "Max_E g",
-            "Max_N g",
-            "Max_Z g",
-            "Voltage",
-            "Temperature",
-        ]
-        default_idx = 0
-        for name in preferred:
-            if name in num_cols:
-                default_idx = num_cols.index(name)
-                break
-        value_col = st.selectbox("Columna de valores", options=num_cols, index=default_idx)
-        bins = st.slider("Bins", min_value=5, max_value=200, value=50, step=1)
-        fig = _plot_raw_histogram(df[value_col], bins=bins, logy=logy, normalize=normalize, cumulative=cumulative)
-        col_plot, col_ai = st.columns([3, 2])
-        with col_plot:
-            col_plot.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        df_small = df[["datetime", value_col]].dropna().head(20) if "datetime" in df.columns else df[[value_col]].dropna().head(20)
-        try:
-            df_head_md = df_small.to_markdown(index=False)
-        except Exception:
-            df_head_md = df_small.to_string(index=False)
-        time_span = None
-        if "datetime" in df.columns:
-            try:
-                dt_clean = pd.to_datetime(df["datetime"], errors="coerce")
-                dt_min = dt_clean.min(); dt_max = dt_clean.max()
-                if pd.notna(dt_min) and pd.notna(dt_max):
-                    time_span = f"{dt_min} -> {dt_max}"
-            except Exception:
-                pass
-
-        def column_notes():
-            analysis_ts = datetime.now().isoformat(timespec="seconds")
-            try:
-                series = pd.to_numeric(df[value_col], errors="coerce").dropna()
-                n = int(series.size)
-                if n:
-                    stats = f"n={n}; min={series.min():.3g}; median={series.median():.3g}; mean={series.mean():.3g}; max={series.max():.3g}"
-                else:
-                    stats = ""
-            except Exception:
-                stats = ""
-            base = f"histograma desde columna='{value_col}'; bins={bins}; normalize={normalize}; cumulative={cumulative}; logy={logy}; analysis_ts={analysis_ts}"
-            if stats:
-                base += f"; {stats}"
-            return base
-
-        with col_ai:
-            col_ai.subheader("Interprete IA")
-            _render_histogram_ai_panel(
-                container=col_ai,
-                key_prefix="hist_raw",
-                filename=filename,
-                meta=meta,
+                columns=subcols,
                 df_head_md=df_head_md,
-                columns=[value_col],
-                time_range=time_span,
-                notes_builder=column_notes,
+                notes=export_notes,
+                meta=meta,
+                filename=filename,
             )
-        return
+            col_ai.caption("Contexto enviado a 'AI Equipo IA'.")
+        except Exception:
+            pass
 
 
-
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
