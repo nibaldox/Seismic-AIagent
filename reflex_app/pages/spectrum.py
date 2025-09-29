@@ -224,7 +224,7 @@ class SpectrumState(rx.State):
             return
 
         try:
-            agents = load_agent_suite()
+            agents = load_agent_suite("config/agents_config.yaml")
         except Exception as exc:
             self.ai_error = f"No se pudo inicializar el intérprete IA: {exc}"
             return
