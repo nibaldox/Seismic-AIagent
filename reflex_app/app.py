@@ -18,7 +18,10 @@ from .pages import (  # noqa: E402
 )
 
 
-app = rx.App(state=AppState)
+# Nota: La versión actual de Reflex no acepta 'state' en el constructor de App.
+# Cada página usa su propio rx.State interno. Si se requiere estado global,
+# podemos exponerlo con un módulo separado y accederlo desde las páginas.
+app = rx.App()
 
 # Rutas principales
 app.add_page(index.index, route="/", title="Inicio")

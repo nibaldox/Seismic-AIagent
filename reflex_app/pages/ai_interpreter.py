@@ -14,7 +14,7 @@ def page() -> rx.Component:
             ),
             section(
                 "Contexto",
-                rx.textarea(placeholder="Notas y contexto para los agentes...", width="100%"),
+                rx.text_area(placeholder="Notas y contexto para los agentes...", width="100%"),
                 rx.button("Ejecutar Análisis IA"),
             ),
             placeholder_chart("Resultados IA"),
