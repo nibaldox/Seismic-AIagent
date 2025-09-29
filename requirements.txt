@@ -31,3 +31,6 @@ black
 flake8
 mypy
 pyinstaller
+reflex
+uvicorn
+starlette

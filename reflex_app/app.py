@@ -1,12 +1,22 @@
 import reflex as rx
 
-# Estado global (reactivo)
+
 class AppState(rx.State):
+    """Estado global (reactivo)."""
+
     theme: str = "dark"
 
 
-# Registro de páginas
-from reflex_app.pages import index, waveform, spectrum, histograms, ai_interpreter, location_1d  # noqa: E402
+# Registro de páginas (imports relativos dentro del paquete)
+from .pages import (  # noqa: E402
+    index,
+    waveform,
+    spectrum,
+    histograms,
+    ai_interpreter,
+    location_1d,
+)
+
 
 app = rx.App(state=AppState)
 

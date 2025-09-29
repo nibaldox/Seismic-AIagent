@@ -1,7 +1,7 @@
 import reflex as rx
-from reflex_app.components.layout import app_shell
-from reflex_app.components.charts import placeholder_chart
-from reflex_app.components.forms import section
+from ..components.layout import app_shell
+from ..components.charts import placeholder_chart
+from ..components.forms import section
 
 
 def page() -> rx.Component:

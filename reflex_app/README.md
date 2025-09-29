@@ -31,8 +31,15 @@ reflex_app/
 - `pip install reflex` (se añadirá a requirements en fase 2)
 
 ## Próximos pasos
-1. Implementar `rxconfig.py` y `app.py`
-2. Crear layout base con navegación
-3. Portar páginas principales con estados Reactivos
-4. Añadir bindings a `src/` (lectura/trazas/plots)
-5. Añadir pruebas de UI (smoke) y CI
+1. Instalar dependencias (incluye Reflex): `pip install -r requirements.txt`
+2. Ejecutar app Reflex (dev):
+  - Opción A (desde carpeta raíz): `python -m reflex_app.app`
+  - Opción B (CLI de Reflex): `reflex run` (si config y estructura estándar)
+3. Crear layout base con navegación (listo: `components/layout.py`)
+4. Portar páginas principales con estados reactivos
+5. Añadir bindings a `src/` (lectura/trazas/plots)
+6. Añadir pruebas de UI (smoke) y CI
+
+Notas:
+- Los imports entre módulos usan rutas relativas (`from ..components...`) dentro del paquete `reflex_app`.
+- Verás avisos de import hasta instalar `reflex`.

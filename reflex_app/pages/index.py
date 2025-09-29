@@ -1,5 +1,5 @@
 import reflex as rx
-from reflex_app.components.layout import app_shell
+from ..components.layout import app_shell
 
 
 def index() -> rx.Component:
