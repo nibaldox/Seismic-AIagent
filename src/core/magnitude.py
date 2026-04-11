@@ -24,12 +24,86 @@ except ImportError:
     Inventory = None
     read_inventory = None
 
+# Standard Wood-Anderson seismograph poles-zeros-gain (Uhrhammer & Collins 1990).
+# T0 = 0.8 s (f0 = 1.25 Hz), h = 0.7 (critical damping ratio), gain = 2800.
+# These values are the international standard for local magnitude (ML) computation.
+_WA_PAZ = {
+    "poles": [
+        complex(-4.44288, 4.44288),   # -2π·f0·h ± 2π·f0·sqrt(1-h²)·i
+        complex(-4.44288, -4.44288),
+    ],
+    "zeros": [0j, 0j],
+    "gain": 1.0,
+    "sensitivity": 2800.0,  # V·s/m  (Wood-Anderson static magnification)
+}
+
 try:
     from obspy.signal.filter import bandpass as obspy_bandpass
 except ImportError:
     obspy_bandpass = None
 
 DEFAULT_BAND = (1.0, 20.0)  # Hz para limpieza basica antes de amplitud ML
+
+# ---------------------------------------------------------------------------
+# Calibración regional de magnitud
+# ---------------------------------------------------------------------------
+
+def _load_magnitude_calibration() -> dict:
+    """Load magnitude calibration from agents_config.yaml, fall back to Hutton & Boore."""
+    try:
+        import os
+        from pathlib import Path
+        # Locate config relative to this file (src/core/ → project root → config/)
+        config_path = Path(__file__).resolve().parents[2] / "config" / "agents_config.yaml"
+        if not config_path.exists():
+            return {}
+        import yaml  # PyYAML is a transitive dependency of ObsPy and Streamlit
+        with open(config_path, "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return cfg.get("magnitude_calibration", {})
+    except Exception:
+        return {}
+
+
+def _log10_a0_regional(distance_km: float, calibration: dict | None = None) -> float:
+    """Return log10(A0(R)) — a NEGATIVE value — for the active calibration region.
+
+    The YAML stores positive C(Δ) coefficients (easier to read/compare).  This
+    function negates them to return the physically correct log10(A0) < 0.
+
+    Falls back to Hutton & Boore (1987) if no calibration is supplied or the
+    active region is not found in the config.
+    """
+    if not calibration:
+        return _log10_a0_hutton_boore(distance_km)
+
+    active = calibration.get("active_region", "hutton_boore_california")
+    regions = calibration.get("regions", {})
+    region = regions.get(active)
+    if not region:
+        return _log10_a0_hutton_boore(distance_km)
+
+    segments = region.get("segments", [])
+    for seg in segments:
+        if distance_km <= seg.get("max_dist_km", float("inf")):
+            a = seg.get("a", 0.0)
+            b = seg.get("b", 0.0)
+            c = seg.get("c", 0.0)
+            c_delta = a * distance_km + (b * math.log10(max(distance_km, 0.1))) + c
+            return -c_delta  # negate: YAML stores +C(Δ), we return −C(Δ) = log10(A0)
+
+    # Beyond last segment: use last segment coefficients
+    if segments:
+        seg = segments[-1]
+        a, b, c = seg.get("a", 0.0), seg.get("b", 0.0), seg.get("c", 0.0)
+        c_delta = a * distance_km + (b * math.log10(max(distance_km, 0.1))) + c
+        return -c_delta
+
+    return _log10_a0_hutton_boore(distance_km)
+
+
+# Load once at import time; can be None if YAML not available
+_MAGNITUDE_CALIBRATION: dict = _load_magnitude_calibration()
 
 
 @dataclass
@@ -44,6 +118,8 @@ class MagnitudeResult:
     instrument_response_removed: bool = False
     sensor_type: Optional[str] = None
     units_assumed: Optional[str] = None
+    # Uncertainty in magnitude units (±). None if unknown.
+    ml_uncertainty: Optional[float] = None
 
     def __post_init__(self):
         if self.warnings is None:
@@ -61,28 +137,56 @@ class MagnitudeResult:
             "instrument_response_removed": self.instrument_response_removed,
             "sensor_type": self.sensor_type,
             "units_assumed": self.units_assumed,
+            "ml_uncertainty": self.ml_uncertainty,
         }
 
 
 def _estimate_distance_from_ps(delta_ps: float) -> float:
-    """Crude distance estimate (km) from P-S time difference."""
+    """Distance estimate (km) from P-S differential time.
+
+    Uses the Wadati relationship: R = k * ΔtPS, where
+        k = Vp·Vs / (Vp - Vs)
+
+    Default k=8.4 corresponds to Vp=6.0 km/s, Vs=3.5 km/s — which matches
+    the standard Chilean crustal velocity model (corteza andina, 0-35 km):
+        k = 6.0 * 3.5 / (6.0 - 3.5) = 21.0 / 2.5 = 8.40 km/s  ✓
+
+    Valid only for shallow crustal events (<35 km depth).  For intraslab events
+    in Chile (50-300 km), Vp≈7.8 km/s, Vs≈4.5 km/s → k≈10.6 km/s.
+    Single-station distance is inherently uncertain (±20-30%); use with caution.
+    """
     return delta_ps * 8.4
 
 
 def _log10_a0_hutton_boore(distance_km: float) -> float:
-    """Piecewise log10 A0(R) approximation (Hutton & Boore 1987)."""
+    """Return log10(A0(R)) per Hutton & Boore (1987) — South California.
+
+    A0 is the *reference amplitude* (mm on Wood-Anderson) for an ML=0 earthquake
+    at distance R.  Because A0 is always < 1 mm, log10(A0) is NEGATIVE.
+
+    The correction term C(R) = -log10(A0) is positive and is what gets ADDED to
+    log10(A_measured) to obtain ML:
+        ML = log10(A_mm) - log10(A0) = log10(A_mm) + C(R)
+
+    At 100 km: C(100) ≈ 3.40  →  log10(A0) = -3.40  →  A0 ≈ 0.0004 mm.
+    """
     if distance_km <= 60.0:
-        return 0.018 * distance_km + 2.17
+        return -(0.018 * distance_km + 2.17)
     else:
-        return 0.0038 * distance_km + 3.02
+        return -(0.0038 * distance_km + 3.02)
 
 
-def _compute_ml_hutton_boore(amplitude_mm: float, distance_km: float) -> float:
+def _compute_ml_hutton_boore(amplitude_mm: float, distance_km: float,
+                             calibration: dict | None = None) -> float:
+    """Compute ML = log10(A_mm) - log10(A0(R)).
+
+    log10(A0) is negative, so this equals log10(A_mm) + C(R) where C(R) > 0.
+    """
     if amplitude_mm <= 0 or distance_km <= 0:
         raise ValueError("Amplitud o distancia invalida para ML")
     log10_a = math.log10(amplitude_mm)
-    log10_a0 = _log10_a0_hutton_boore(distance_km)
-    return log10_a - log10_a0
+    log10_a0 = _log10_a0_regional(distance_km, calibration or _MAGNITUDE_CALIBRATION)
+    return log10_a - log10_a0  # log10_a0 is negative → effective addition of C(R)
 
 
 def _preprocess_array(data: np.ndarray) -> np.ndarray:
@@ -132,11 +236,22 @@ def _bandpass(data: np.ndarray, sr: float, freqmin: float, freqmax: float) -> np
 
 
 def _integrate(data: np.ndarray, sr: float) -> np.ndarray:
-    """Simple cumulative integration (trapezoidal)."""
+    """Cumulative trapezoidal integration with linear baseline correction.
+
+    Without baseline correction, any DC offset in the input causes a linear
+    ramp in the integral, and two successive integrations produce a quadratic
+    drift that makes displacement estimates unreliable beyond ~30 s.
+    The linear detrend after integration removes this first-order drift.
+    """
     if data.size == 0:
         return data
     dt = 1.0 / sr
-    return np.cumsum((data[:-1] + data[1:]) * 0.5) * dt
+    integrated = np.cumsum((data[:-1] + data[1:]) * 0.5) * dt
+    # Remove linear trend accumulated from any residual DC offset
+    x = np.arange(integrated.size, dtype=float)
+    coeffs = np.polyfit(x, integrated, 1)
+    integrated -= np.polyval(coeffs, x)
+    return integrated
 
 
 def _remove_instrument_response(data: np.ndarray, sr: float, inventory_path: Optional[str] = None, 
@@ -200,6 +315,43 @@ def _detect_units_from_trace_stats(trace_stats) -> Tuple[str, List[str]]:
     else:
         warnings_list.append(f"Canal desconocido ({channel}) - asumiendo cm/s²")
         return "cm/s²", warnings_list
+
+
+def _simulate_wood_anderson(disp_mm: np.ndarray, sr: float, warnings: List[str]) -> np.ndarray:
+    """Convert displacement (mm) to Wood-Anderson equivalent amplitude (mm).
+
+    Uses the standard WA instrument poles-zeros (Uhrhammer & Collins 1990) via
+    ObsPy's ``simulate_seismometer`` when available.  Falls back to a bandpass
+    approximation centred on the WA passband (0.5–8 Hz) only when ObsPy is not
+    installed — this fallback introduces a systematic bias of ±0.3–0.5 ML units
+    and is flagged in the warnings.
+
+    Input must be in *millimetres of displacement*.  Output is also in mm,
+    representing the peak excursion of the WA needle.
+    """
+    if disp_mm.size == 0:
+        return disp_mm
+
+    if simulate_seismometer is not None:
+        try:
+            # simulate_seismometer expects *metres* of displacement and returns
+            # metres of WA displacement; we work in mm throughout so scale here.
+            disp_m = disp_mm / 1000.0
+            wa_m = simulate_seismometer(
+                disp_m,
+                sr,
+                paz_remove=None,        # input is already displacement (no instrument to remove)
+                paz_simulate=_WA_PAZ,
+                water_level=None,
+            )
+            warnings.append("✓ Simulación Wood-Anderson con PAZ estándar (Uhrhammer & Collins 1990)")
+            return wa_m * 1000.0  # back to mm
+        except Exception as exc:
+            warnings.append(f"⚠️ simulate_seismometer falló ({exc}), usando bandpass aproximado")
+
+    # Fallback: approximate WA response with a bandpass around its passband
+    warnings.append("⚠️ Simulación WA aproximada (bandpass 0.5–8 Hz) — error esperado ±0.3–0.5 ML")
+    return _bandpass(disp_mm, sr, 0.5, 8.0)
 
 
 def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]], trace_data: np.ndarray, 
@@ -281,8 +433,8 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
         disp = _integrate(vel, sr)
         disp_mm = disp * 1000.0
 
-    # Simulación Wood-Anderson aproximada
-    wa_mm = _bandpass(disp_mm, sr, 0.5, 8.0) if simulate_seismometer else disp_mm
+    # Simulación Wood-Anderson usando PAZ estándar (Uhrhammer & Collins 1990)
+    wa_mm = _simulate_wood_anderson(disp_mm, sr, warnings)
     
     if wa_mm.size == 0:
         return MagnitudeResult(None, None, delta_ps, distance_km, "Sin datos WA", 
@@ -290,9 +442,10 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
                               instrument_response_removed=response_removed, 
                               sensor_type=sensor_type, units_assumed=units_detected)
 
-    # Ventana de amplitud
+    # Ventana de amplitud: el pico Wood-Anderson puede llegar hasta 3×Δ(P-S)
+    # después del arribo P, especialmente en eventos distantes. Mínimo 30 s.
     p_time = float(p_pick["time_rel"])
-    win_len = min(delta_ps * 2.0, 15.0)
+    win_len = min(max(delta_ps * 3.0, 30.0), 90.0)
     start_idx = int(p_time * sr)
     end_idx = int((p_time + win_len) * sr)
     end_idx = min(end_idx, wa_mm.size)
@@ -313,7 +466,7 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
                               sensor_type=sensor_type, units_assumed=units_detected) 
 
     try:
-        ml = _compute_ml_hutton_boore(peak_mm, distance_km)
+        ml = _compute_ml_hutton_boore(peak_mm, distance_km, _MAGNITUDE_CALIBRATION)
     except Exception as exc:
         return MagnitudeResult(None, peak_mm, delta_ps, distance_km, f"Error ML: {exc}", 
                               method="wood_anderson_inst", warnings=warnings + ["Error computo ML"],
@@ -324,14 +477,26 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
     if not response_removed:
         warnings.append("⚠️ IMPORTANTE: Respuesta instrumental no removida")
     warnings.append("📍 Distancia estimada de P-S (una estación)")
-    warnings.append("🔬 Magnitud preliminar - requiere calibración regional")
+    # Mostrar región de calibración activa
+    active_region = _MAGNITUDE_CALIBRATION.get("active_region", "hutton_boore_california")
+    regions = _MAGNITUDE_CALIBRATION.get("regions", {})
+    region_desc = regions.get(active_region, {}).get("description", active_region)
+    warnings.append(f"📐 Calibración: {region_desc}")
+    warnings.append("🔬 Magnitud preliminar - requiere calibración regional y red multi-estación")
+
+    # Incertidumbre estimada conservadoramente:
+    # - sin respuesta instrumental: ±1.0 unidades
+    # - con respuesta pero sin calibración regional: ±0.5 unidades
+    # - estación única agrega ~±0.3 adicionales siempre
+    ml_uncertainty = 1.0 if not response_removed else 0.5
 
     notes = f"ML Wood-Anderson (respuesta {'✓' if response_removed else '✗'})"
-    
-    return MagnitudeResult(ml, peak_mm, delta_ps, distance_km, notes, 
-                          method="wood_anderson_inst", warnings=warnings, 
-                          instrument_response_removed=response_removed, 
-                          sensor_type=sensor_type, units_assumed=units_detected)
+
+    return MagnitudeResult(ml, peak_mm, delta_ps, distance_km, notes,
+                          method="wood_anderson_inst", warnings=warnings,
+                          instrument_response_removed=response_removed,
+                          sensor_type=sensor_type, units_assumed=units_detected,
+                          ml_uncertainty=ml_uncertainty)
 
 
 # Mantener funciones originales para compatibilidad

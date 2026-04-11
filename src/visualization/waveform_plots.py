@@ -107,8 +107,13 @@ def adaptive_downsample(data: np.ndarray, times: np.ndarray, target_points: int 
             continue
         min_idx = np.argmin(chunk)
         max_idx = np.argmax(chunk)
-        down_data.extend([chunk[min_idx], chunk[max_idx]])
-        down_times.extend([t_chunk[min_idx], t_chunk[max_idx]])
+        # Preserve temporal order within bucket to maintain monotonic time axis
+        if min_idx <= max_idx:
+            down_times.extend([t_chunk[min_idx], t_chunk[max_idx]])
+            down_data.extend([chunk[min_idx], chunk[max_idx]])
+        else:
+            down_times.extend([t_chunk[max_idx], t_chunk[min_idx]])
+            down_data.extend([chunk[max_idx], chunk[min_idx]])
     return np.array(down_times), np.array(down_data)
 
 
@@ -178,7 +183,8 @@ def create_waveform_plot(
 
     window_start, window_end = time_window
 
-    annotations = []
+    annotations: list = []
+    pick_shapes: list = []
     processed_arrays: List[np.ndarray] = []
     for idx, trace in enumerate(plot_traces, start=1):
         if isinstance(trace, dict):
@@ -233,18 +239,13 @@ def create_waveform_plot(
         # Axis placeholder; real scaling applied after loop depending on amplitude_scale
         fig.update_yaxes(title_text="", row=idx, col=1, automargin=True, zeroline=False, showline=False)
 
-        # Build left-side annotation similar to provided screenshot
-        # Compute peak amplitude in g for a consistent representation
-        # First derive data in g regardless of display unit
-        data_in_g = masked_data if axis_unit == "g" else (_convert_cmps2(masked_data * (100.0 if axis_unit == "m/s²" else 1.0), "g")[0] if axis_unit != "g" else masked_data)
+        # Left-side label: amplitude in µg/mg + channel name
+        data_in_g = _convert_cmps2(masked_data, "g")[0]
         peak_g = float(np.max(np.abs(data_in_g))) if data_in_g.size else 0.0
         amp_label = _format_micro_g(peak_g)
-
         channel_label = name
         annotation_text = f"{amp_label}<br>{channel_label}"
-        # Determine a y position near the top of current data range (before any global/normalized rescale)
         local_y_max = float(np.max(masked_data)) if masked_data.size else 0.0
-        # If flat line, nudge a bit so text is visible after later scaling adjustments
         if masked_data.size and np.allclose(local_y_max, np.min(masked_data)):
             local_y_max += 1.0 if local_y_max == 0 else abs(local_y_max) * 0.05
         annotations.append(
@@ -262,8 +263,35 @@ def create_waveform_plot(
             )
         )
 
+        # PGA marker: horizontal dashed line + label at peak amplitude position
+        if down_data.size > 0:
+            pga_val = float(np.max(np.abs(down_data)))
+            pga_t_idx = int(np.argmax(np.abs(down_data)))
+            pga_t = float(down_times[pga_t_idx]) if down_times.size > pga_t_idx else 0.0
+            pga_sign = 1.0 if down_data[pga_t_idx] >= 0 else -1.0
+            pga_signed = pga_sign * pga_val
+            x_ref = f"x{idx}" if idx > 1 else "x"
+            y_ref = f"y{idx}" if idx > 1 else "y"
+            # Dashed horizontal line spanning from pga_t to end of window
+            pick_shapes.append(dict(
+                type="line",
+                xref=x_ref, yref=y_ref,
+                x0=pga_t, x1=window_end,
+                y0=pga_signed, y1=pga_signed,
+                line=dict(color="rgba(255,100,100,0.5)", width=1, dash="dot"),
+                layer="below",
+            ))
+            # PGA value annotation
+            annotations.append(dict(
+                xref=x_ref, yref=y_ref,
+                x=pga_t, y=pga_signed,
+                xanchor="right", yanchor="bottom",
+                text=f"PGA={pga_val:.1f} {axis_unit}",
+                showarrow=False,
+                font=dict(size=9, color="rgba(255,150,150,0.9)"),
+            ))
+
     # Overlay picks (vertical lines). We assign them to matching channel trace rows.
-    pick_shapes = []
     if picks:
         channel_row_map = {}
         for idx, trace in enumerate(plot_traces, start=1):

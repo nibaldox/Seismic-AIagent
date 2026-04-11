@@ -19,14 +19,20 @@ def create_dynamic_agents_config(selected_model: str, base_config_path: str = "c
     with open(base_config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
+    # Determinar proveedor según el modelo seleccionado
+    if selected_model.startswith("lmstudio:"):
+        provider = "lmstudio"
+        model_id = selected_model[len("lmstudio:"):]
+    else:
+        provider = "openrouter"
+        model_id = selected_model
+
     # Actualizar todos los agentes con el modelo seleccionado
     if 'agents' in config:
         for agent_key, agent_config in config['agents'].items():
             if 'model' in agent_config:
-                # Mantener el proveedor como openrouter para todos los modelos listados
-                agent_config['model']['id'] = selected_model
-                # Todos los modelos listados son de OpenRouter
-                agent_config['model']['provider'] = "openrouter"
+                agent_config['model']['id'] = model_id
+                agent_config['model']['provider'] = provider
     
     return config
 

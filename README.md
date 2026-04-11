@@ -1,9 +1,9 @@
 <div align="center">
 
 # 🌊 Seismic AIagent
-Análisis sísmico interactivo con asistencia de IA (Streamlit)
+Análisis sísmico interactivo con asistencia de IA — optimizado para Chile y zona de subducción andina
 
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)  
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.28+-red.svg)](https://streamlit.io/)
 
 </div>
@@ -12,28 +12,44 @@ Análisis sísmico interactivo con asistencia de IA (Streamlit)
 
 ## 📋 Resumen
 
-Seismic AIagent es una aplicación híbrida (escritorio/web) para análisis rápido de formas de onda sísmicas, espectros y telemetría. Combina procesamiento local (ObsPy/NumPy) con un intérprete de IA especializado que explica hallazgos y sugiere acciones.
+Seismic AIagent es una aplicación Streamlit para análisis rápido de formas de onda sísmicas, espectros y telemetría. Combina algoritmos clásicos de sismología (ObsPy/NumPy) con un sistema multi-agente de IA que interpreta los datos y sugiere acciones operativas.
 
-**� Interfaz Streamlit:** Aplicación web completa todo-en-uno
-
-Puntos clave:
-- Visualización y procesamiento de ondas (filtros, picks STA/LTA, magnitud ML-WA)
-- Análisis espectral (Espectrograma, FFT, PSD) con interpretación IA
-- Series temporales de telemetría (Histogramas Gecko)
-- Localización 1D simple por grilla
-- Selector dinámico de modelos IA (DeepSeek, Moonshot, Grok, etc.)
-- Intérprete IA unificado: página única "🤖 AI Interpreter" con modos Individual y Equipo (coordinado)
+**Diseñado para Chile:** calibración ML regional, modelo de velocidades cortical andino (Vp=6.0 km/s), y agentes IA contextualizados en la sismotectónica de la zona de subducción Nazca/Sudamérica.
 
 ---
 
 ## ✨ Funcionalidades
 
-- Ingesta multi‑formato: MiniSEED, SAC, SEG-2, exportes Gecko; lectura Kelunji `.ss`
-- Visualización interactiva con Plotly y controles de filtrado
-- Detección automática de fases P/S (STA/LTA)
-- Magnitud local tipo Wood‑Anderson (aproximada) con avisos de calidad
-- Análisis espectral avanzado y panel IA especializado
-- Equipo IA coordinado (multi‑agente) para síntesis integral
+### Procesamiento sísmico
+- Ingesta multi-formato: MiniSEED, SAC, SEG-2, exportes Gecko, archivos Kelunji `.ss`
+- Filtros digitales: bandpass, highpass, lowpass (ObsPy zerophase, Butterworth 4 polos)
+- Detección automática de fases P/S con STA/LTA + prefiltro 2–15 Hz
+  - Detección de fase S por Vp/Vs=1.73 en canal Z, o STA/LTA independiente en horizontales
+  - Picks con campo `uncertainty_s` y `snr_db`
+- Magnitud local Wood-Anderson (ML):
+  - Simulación WA con PAZ reales (Uhrhammer & Collins 1990; polos ±4.44 rad/s, gain=2800)
+  - Calibración regional configurable (activa: CSN Chile); Hutton-Boore California, Colombia, Brasil disponibles
+  - Resultado con incertidumbre explícita (`ML ≈ X.X ± 1.0`)
+  - Integración aceleración→desplazamiento con corrección de línea base por segmento
+- Localización 1D por búsqueda en grilla (superficial, experimental)
+
+### Análisis espectral
+- Espectrograma (ventanas Hann/Hamming/Blackman, overlap configurable)
+- FFT con normalización por RMS de ventana y anotación de frecuencia dominante
+- PSD Welch con `detrend='linear'` por segmento, unidades `dB re counts²/Hz`, anotación de frecuencia dominante
+- **H/V Espectral (HVSR)** — método Nakamura (1989): detecta automáticamente los tres componentes (E/N/Z), suavizado en octavas, frecuencia de resonancia f₀ anotada
+
+### Visualización
+- Formas de onda Plotly con downsampling min/max temporalmente monótono
+- Anotaciones de PGA por canal (línea punteada + etiqueta en el pico)
+- Picks P/S superpuestos con color diferenciado
+
+### Sistema IA (Agno v2 + OpenRouter)
+- 6 agentes especializados: Analizador de Formas de Onda, Espectral, Histogramas, Correlacionador Sísmico, Sintetizador de Reportes, Control de Calidad
+- Contexto enriquecido a agentes: PGA, RMS, SNR, frecuencia dominante, centroide espectral, ancho de banda 80%, picks registrados
+- Modo Individual (un agente) y Equipo coordinado (todos los agentes)
+- Selector dinámico de modelo LLM en tiempo de ejecución
+- Ventana de búsqueda sísmica adaptativa: **horas** para trazas <6 h, días para registros largos
 
 ---
 
@@ -41,216 +57,148 @@ Puntos clave:
 
 ```text
 .
-├─ assets/
 ├─ config/
-│  ├─ agents_config.yaml     # Configuración principal de agentes IA
-│  ├─ agents_config_dynamic.yaml # Generado automáticamente por selector
-│  └─ example.env            # Variables de entorno de ejemplo
-├─ data/                     # Datos de ejemplo/pruebas
-├─ docs/                     # Documentación
-├─ pages/                    # Páginas Streamlit
+│  ├─ agents_config.yaml       # Agentes IA + calibración regional ML
+│  ├─ agents_config_dynamic.yaml  # Generado automáticamente por selector de modelo
+│  └─ example.env              # Variables de entorno de ejemplo
+├─ pages/
 │  ├─ 00_📁_Uploader.py
 │  ├─ 01_📊_Waveform_Viewer.py
-│  ├─ 02_🔍_Spectrum_Analysis.py
+│  ├─ 02_🔍_Spectrum_Analysis.py  # incluye HVSR
+│  ├─ 04_🌍_Location_1D.py
 │  └─ 07_🤖_AI_Interpreter.py
-├─ src/                      # Código fuente (core, ai_agent, utils, viz)
-├─ streamlit_app.py          # App Streamlit principal
-└─ tests/                    # Tests unitarios e integración
+├─ src/
+│  ├─ ai_agent/                # Orquestación Agno v2
+│  ├─ core/                    # Algoritmos sismológicos
+│  │  ├─ magnitude.py          # ML con PAZ Wood-Anderson + calibración regional
+│  │  ├─ picking.py            # STA/LTA con prefiltro y detección S
+│  │  └─ signal_processing.py  # Filtros ObsPy (highpass/lowpass nativos)
+│  └─ visualization/
+│     └─ spectrum_plots.py     # FFT, PSD, Espectrograma, HVSR
+├─ streamlit_app.py
+└─ tests/
 ```
 
 ---
 
 ## ⚙️ Requisitos
 
-- Windows con PowerShell (recomendado), Python 3.9+
-- Dependencias listadas en `requirements.txt`
+- Python 3.9+
+- Dependencias en `requirements.txt` (ObsPy, Streamlit, Agno v2, Plotly, SciPy)
 
 ---
 
-## 🚀 Instalación y ejecución
+## 🚀 Instalación
 
-### 📋 Preparación inicial
-
-```powershell
-# 1) Clonar el repositorio
+```bash
 git clone https://github.com/nibaldox/Seismic-AIagent.git
 cd Seismic-AIagent
 
-# 2) Crear y activar entorno virtual Python
 python -m venv venv
-./venv/Scripts/Activate.ps1
+source venv/bin/activate          # Linux/Mac
+# venv\Scripts\Activate.ps1      # Windows PowerShell
 
-# 3) Instalar dependencias Python
 pip install -r requirements.txt
 
-# 4) Variables de entorno (opcional)
-copy config/example.env .env
-# Edita .env con tus claves de OpenRouter/OpenAI
+cp config/example.env .env        # Editar con clave OpenRouter
+streamlit run streamlit_app.py
 ```
 
-### � Ejecutar aplicación Streamlit
-
-```powershell
-# Ejecutar aplicación Streamlit
-streamlit run streamlit_app.py --server.port 8501
-
-# Abrir: http://localhost:8501
-```
-
-**Características:**
-- Selector de modelos IA en página principal
-- Uploader, Waveform Viewer, Spectrum Analysis, AI Interpreter
-- Análisis coordinado multi-agente
-- Interpretación IA integrada en todas las páginas
-
-### 🐳 Docker (Opcional)
-
-```powershell
-# Construir imagen
-docker build -t seismic-aiagent .
-
-# Ejecutar contenedor
-docker run --rm -p 8501:8501 --env-file config/example.env seismic-aiagent
-```
-
----
-
-## 🔌 API Endpoints (FastAPI)
-
-Cuando uses la arquitectura React + FastAPI, estos son los endpoints disponibles:
-
-### 📊 Procesamiento de señales
-- `POST /waveform/plot` - Genera PNG de formas de onda con filtros
-- `POST /spectrum/plot` - Crea espectrograma/FFT/PSD (retorna PNG + trace_info)
-- `POST /telemetry/histogram` - Histograma desde CSV de telemetría
-- `POST /location/one_d` - Localización 1D con estaciones XY y observaciones P/S
-
-### 🤖 Interpretación IA
-- `POST /ai/spectrum` - Análisis IA de parámetros espectrales + trace_info
-- `POST /ai/waveform` - Interpretación IA del resumen de waveform
-- `POST /ai/histogram` - Análisis IA de datos CSV de telemetría
-
-### 🩺 Utilidades
-- `GET /health` - Estado del servidor
-- `GET /docs` - Documentación automática de Swagger
-
-**Respuestas típicas:**
-```json
-{
-  "image_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "summary": "MiniSEED | 3 traces\nAC.STA1..BHZ | 2023-01-01T00:00:00.000000Z - 2023-01-01T00:10:00.000000Z | 100.0 Hz, 60001 samples",
-  "trace_info": {
-    "filename": "data.mseed",
-    "station": "STA1",
-    "channel": "BHZ",
-    "sampling_rate": 100.0,
-    "starttime": "2023-01-01T00:00:00.000000Z"
-  }
-}
-```
-
----
-
-## 🤖 Configuración de IA (Agno v2)
-
-Archivo principal: `config/agents_config.yaml` (reemplaza al legado `agno_config.yaml`).
-
-### 📋 Selector dinámico de modelos (Streamlit)
-
-En la página principal de Streamlit encontrarás:
-
-**🤖 Configuración de Modelo**
-- DeepSeek Chat v3.1 (actual por defecto)
-- Moonshot Kimi K2 (`moonshotai/kimi-k2:free`)
-- xAI Grok 4 Fast (`x-ai/grok-4-fast:free`)
-- Meituan LongCat Flash (`meituan/longcat-flash-chat`)
-- Z-AI GLM 4.5 Air (`z-ai/glm-4.5-air:free`)
-- Qwen3 235B (`qwen/qwen3-235b-a22b:free`, non-thinking)
-
-**Cómo funciona:**
-1. Selecciona modelo en dropdown de página principal
-2. Se crea automáticamente `config/agents_config_dynamic.yaml`
-3. La página "AI Interpreter" usará el modelo seleccionado
-4. En React+FastAPI, el backend usará la configuración dinámica
-
-Ejemplo básico de `agents_config.yaml`:
-
-```yaml
-agents:
-  waveform_analyzer:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-  spectrum_analyzer:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-  histogram_analyzer:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-  earthquake_correlator:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-    capabilities: [earthquake_search, web_search]
-  report_synthesizer:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-  quality_assurance:
-    model: openrouter:deepseek/deepseek-chat-v3.1:free
-
-settings:
-  cache: true
-  monitoring: true
-  show_tool_calls: false
-```
-
-### 🔑 Variables de entorno
-
-Archivo `.env` (copia de `config/example.env`):
+### Docker
 
 ```bash
-# OpenRouter (recomendado - soporta todos los modelos listados)
-OPENROUTER_API_KEY=sk-or-v1-xxxxx
-
-# Alternativos
-OPENAI_API_KEY=sk-xxxxx
-ANTHROPIC_API_KEY=sk-ant-xxxxx
-
-# Backend FastAPI (opcional)
-CORS_ORIGINS=http://localhost:5173,http://localhost:5174
-UPLOAD_DIR=./uploaded_files
+docker build -t seismic-aiagent .
+docker run --rm -p 8501:8501 --env-file .env seismic-aiagent
 ```
-
-Notas:
-- El **selector dinámico** funciona principalmente con OpenRouter
-- En **Streamlit**: configuración en página principal + "AI Interpreter"
-- En **React+FastAPI**: el backend lee la configuración automáticamente
-- Si no tienes clave IA, las funciones básicas (plots, filtros) siguen funcionando
 
 ---
 
-## � Pruebas
+## 🤖 Configuración de IA
 
-```powershell
-# Ejecutar toda la suite
-pytest -q
+### Agentes disponibles
+
+| Agente | Función |
+|--------|---------|
+| Analizador de Formas de Onda | Tipo de evento, calidad de señal, coherencia de picks |
+| Analizador Espectral | Frecuencia dominante, clasificación espectral, recomendaciones de filtro |
+| Analizador de Histogramas | Tendencias de telemetría, anomalías, estado del equipo |
+| Correlacionador de Sismos | Búsqueda USGS/EMSC, correlación con sismicidad regional |
+| Sintetizador de Reportes | Informe integrado con recomendaciones priorizadas |
+| Control de Calidad | Auditoría de consistencia entre agentes |
+
+### Selector dinámico de modelo
+
+En la página principal selecciona el LLM (DeepSeek, Moonshot Kimi K2, Grok 4, GLM 4.5, Qwen3, etc.). El sistema genera `agents_config_dynamic.yaml` automáticamente y todos los agentes usan ese modelo.
+
+### Variables de entorno
+
+```bash
+# .env
+OPENROUTER_API_KEY=sk-or-v1-xxxxx   # Requerido para IA
+OPENAI_API_KEY=sk-xxxxx              # Opcional
+ANTHROPIC_API_KEY=sk-ant-xxxxx       # Opcional
+```
+
+---
+
+## 📐 Calibración de magnitud regional
+
+La calibración activa se configura en `config/agents_config.yaml`:
+
+```yaml
+magnitude_calibration:
+  active_region: "csn_chile"   # ← cambiar aquí para otra región
+```
+
+| Región | Referencia | Aplicación |
+|--------|-----------|-----------|
+| `csn_chile` ✅ **activa** | CSN / Barrientos (1980) | Chile, zona de subducción andina |
+| `hutton_boore_california` | Hutton & Boore (1987) | Sur de California |
+| `langer_colombia` | Langer et al. (1987) | Colombia, Andes del Norte |
+| `usp_brasil` | Assumpção et al. (2002) | Brasil, escudo estable |
+| `richter_original` | Richter (1935) | Referencia histórica |
+
+> **Chile:** Vp=6.0 km/s, Vs=3.46 km/s (Vp/Vs=1.73) para eventos corticales.
+> Para eventos intraslab (50–300 km) usar Vp≈7.8 km/s en la página de Localización 1D.
+> Verificar coeficientes con publicaciones actuales del [CSN](https://www.csn.uchile.cl) antes de reportes oficiales.
+
+---
+
+## 🧪 Pruebas
+
+```bash
+pytest -q                          # suite completa
+pytest tests/test_core.py -v       # módulo específico
+pytest tests/test_core.py::nombre_test -v  # test individual
 ```
 
 ---
 
 ## 📚 Documentación
 
-- Guía de Usuario: `docs/USER_GUIDE.md`
-- Docs Técnicos: `docs/TECHNICAL_DOCS.md`
-- Guía de Modificación de Agentes: `docs/AGENT_MODIFICATION_GUIDE.md`
+| Archivo | Contenido |
+|---------|-----------|
+| `docs/USER_GUIDE.md` | Guía paso a paso para cada página |
+| `docs/TECHNICAL_DOCS.md` | Arquitectura, APIs, despliegue |
+| `docs/AGENT_MODIFICATION_GUIDE.md` | Cómo agregar/modificar agentes |
+| `CLAUDE.md` | Guía para Claude Code (estructura y comandos) |
 
 ---
 
 ## 🤝 Contribuir
 
-1) Crea rama desde main (feature/fix/chore)  
-2) Asegura tests en verde  
-3) Abre Pull Request: https://github.com/nibaldox/Seismic-AIagent/pulls
+1. Crear rama desde `main` (`feature/`, `fix/`, `chore/`)
+2. Asegurar tests en verde (`pytest -q`)
+3. Abrir Pull Request
 
 ---
 
-## � Licencia
+## 📄 Licencia
 
-MIT (ver archivo LICENSE si corresponde).
+MIT
 
 ---
 
-Hecho con ❤️ para análisis sísmico asistido por IA.
+<div align="center">
+Hecho para análisis sísmico operativo asistido por IA · Optimizado para la sismicidad de Chile
+</div>

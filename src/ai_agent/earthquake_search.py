@@ -63,6 +63,18 @@ class EarthquakeQuery:
     start: Optional[datetime] = None
     end: Optional[datetime] = None
 
+    def __post_init__(self) -> None:
+        if not -90.0 <= self.latitude <= 90.0:
+            raise ValueError(f"latitude debe estar en [-90, 90], recibido: {self.latitude}")
+        if not -180.0 <= self.longitude <= 180.0:
+            raise ValueError(f"longitude debe estar en [-180, 180], recibido: {self.longitude}")
+        if not 1 <= self.radius_km <= 20001:
+            raise ValueError(f"radius_km debe estar en [1, 20001], recibido: {self.radius_km}")
+        if not 0.0 <= self.min_magnitude <= 10.0:
+            raise ValueError(f"min_magnitude debe estar en [0, 10], recibido: {self.min_magnitude}")
+        if self.start is not None and self.end is not None and self.start >= self.end:
+            raise ValueError(f"start ({self.start}) debe ser anterior a end ({self.end})")
+
     def to_usgs_params(self) -> Dict[str, Any]:
         # Prefer explicit start/end over relative window
         if self.start is not None and self.end is not None:

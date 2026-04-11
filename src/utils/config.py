@@ -16,6 +16,39 @@ class ConfigError(RuntimeError):
     """Raised when a configuration file cannot be located or parsed."""
 
 
+_AGENT_CONFIG_SEARCH_ORDER = ("agents_config_dynamic.yaml", "agents_config.yaml", "agno_config.yaml")
+
+
+def load_agent_config(primary: str | None = None) -> Dict[str, Any]:
+    """Carga la configuración de agentes siguiendo el orden de prioridad.
+
+    Orden: agents_config_dynamic.yaml → agents_config.yaml → agno_config.yaml.
+    Si ``primary`` se especifica, se intenta primero.
+
+    Raises:
+        ConfigError: Si ningún archivo de configuración es encontrado.
+    """
+    candidates = list(_AGENT_CONFIG_SEARCH_ORDER)
+    if primary and primary not in candidates:
+        candidates.insert(0, primary)
+    elif primary:
+        # Mover a la cabeza de la lista
+        candidates = [primary] + [c for c in candidates if c != primary]
+
+    last_error: Exception | None = None
+    for candidate in candidates:
+        try:
+            return load_yaml(candidate)
+        except ConfigError as exc:
+            last_error = exc
+            continue
+
+    raise ConfigError(
+        f"No se encontró ningún archivo de configuración de agentes. "
+        f"Buscado en: {candidates}. Último error: {last_error}"
+    )
+
+
 @functools.lru_cache(maxsize=None)
 def load_yaml(relative_path: str) -> Dict[str, Any]:
     """Load a YAML config file from the config directory.
