@@ -8,9 +8,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from dotenv import load_dotenv
-from src.ai_agent.seismic_interpreter import load_agent_suite, run_histogram_analysis
+from src.ai_agent.seismic_interpreter import run_histogram_analysis
+from src.streamlit_utils.agent_loader import get_agent_suite as _get_agent_suite_central
 from src.streamlit_utils.appearance import handle_error
-from src.streamlit_utils.session_state import get_session, set_team_telemetry_context, set_histogram_data, get_histogram_data, clear_histogram_data
+from src.streamlit_utils.session_state import (
+    get_session, set_team_telemetry_context, set_histogram_data,
+    get_histogram_data, clear_histogram_data, get_current_stream_name,
+)
 
 # Load environment variables
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -20,17 +24,7 @@ st.set_page_config(page_title="Series Temporales Gecko", page_icon="📈")
 
 
 def _get_agent_suite():
-    if "ai_agents" in st.session_state:
-        return st.session_state["ai_agents"]
-    try:
-        agents = load_agent_suite()
-        st.session_state["ai_agents"] = agents
-        st.session_state.pop("ai_agents_error", None)
-        return agents
-    except Exception as exc:
-        st.session_state["ai_agents_error"] = str(exc)
-        st.session_state["ai_agents"] = {}
-        return {}
+    return _get_agent_suite_central()
 
 
 def _render_histogram_ai_panel(*, container, key_prefix: str, filename: str | None, meta: Dict[str, str] | None, df_head_md: str, columns: List[str], time_range: str | None, notes_builder):
@@ -165,6 +159,18 @@ def main():
 
     # Intentar recuperar datos del estado de sesión
     df, meta, filename = get_histogram_data()
+    session = get_session()
+
+    # Advertir si los histogramas cargados corresponden a un dataset diferente al activo
+    current_ds = get_current_stream_name(session=session)
+    if df is not None and meta and current_ds:
+        linked = meta.get("linked_dataset")
+        if linked and linked != current_ds:
+            st.warning(
+                f"⚠️ Los histogramas cargados corresponden al dataset **`{linked}`**, "
+                f"pero el dataset activo es **`{current_ds}`**. "
+                "Considera limpiar y recargar los histogramas para este dataset."
+            )
     
     with st.sidebar:
         st.header("Fuente de datos")
@@ -190,7 +196,8 @@ def main():
                     df, meta = _read_table_with_meta(file_bytes, up.name)
                     df = _ensure_datetime(df)
                     filename = up.name
-                    # Guardar en estado de sesión
+                    # Vincular al dataset activo para detectar inconsistencias
+                    meta["linked_dataset"] = get_current_stream_name(session=get_session())
                     set_histogram_data(df=df, meta=meta, filename=filename)
                 except Exception as e:
                     st.error(f"No se pudo leer el archivo: {e}")
@@ -210,7 +217,8 @@ def main():
                         df, meta = _read_table_with_meta(file_bytes, p.name)
                         df = _ensure_datetime(df)
                         filename = p.name
-                        # Guardar en estado de sesión
+                        # Vincular al dataset activo para detectar inconsistencias
+                        meta["linked_dataset"] = get_current_stream_name(session=get_session())
                         set_histogram_data(df=df, meta=meta, filename=filename)
                     except Exception as e:
                         st.error(f"No se pudo leer {p}: {e}")

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Iterable, List
 from numbers import Number
 
+import numpy as np
 import streamlit as st
 import sys
 import os
@@ -34,6 +35,7 @@ from src.streamlit_utils.session_state import (
     get_traces_by_labels,
     list_dataset_names,
     list_trace_labels,
+    mark_pipeline_step,
     register_stream,
     set_current_stream,
     set_selected_trace,
@@ -49,53 +51,101 @@ from src.core.magnitude import (
     estimate_local_magnitude,  # placeholder (mantener compatibilidad)
     estimate_local_magnitude_wa,
 )
-from src.ai_agent.seismic_interpreter import load_agent_suite, run_primary_analysis
-
-
-def _get_agent_suite():
-    if "ai_agents" in st.session_state:
-        return st.session_state["ai_agents"]
-    try:
-        agents = load_agent_suite()
-        st.session_state["ai_agents"] = agents
-        st.session_state.pop("ai_agents_error", None)
-        return agents
-    except Exception as exc:
-        st.session_state["ai_agents_error"] = str(exc)
-        st.session_state["ai_agents"] = {}
-        return {}
+from src.ai_agent.seismic_interpreter import run_primary_analysis
+from src.streamlit_utils.agent_loader import get_agent_suite as _get_agent_suite
+from src.core.intensity_measures import compute_all_ims
+from src.core.signal_processing import remove_baseline
+from src.core.signal_qc import run_qc, qc_summary_markdown
+from src.streamlit_utils.session_state import set_qc_results, get_qc_results
 
 
 def _build_waveform_context(session, labels: List[str]) -> str:
+    """Build a structured waveform context string for AI agents.
+
+    Includes per-trace metadata plus basic signal metrics (PGA, RMS, rough SNR
+    estimate, dominant frequency) so agents can reason about actual signal values
+    rather than just file metadata.
+    """
+    import numpy as np
+
     base = session.stream_summary or ""
     traces = get_traces_by_labels(labels, session=session)
+
+    # Collect existing picks for this session
+    picks_list = list_picks(session=session)
+
     lines: List[str] = []
     for label, trace in zip(labels, traces):
         stats = getattr(trace, "stats", None)
         if not stats:
             lines.append(f"- {label}")
             continue
+
         station = getattr(stats, "station", "UNK")
         channel = getattr(stats, "channel", "CH")
-        sampling_rate = getattr(stats, "sampling_rate", None)
+        sampling_rate = float(getattr(stats, "sampling_rate", 0) or 0)
         delta = getattr(stats, "delta", None)
         npts = getattr(stats, "npts", None)
         start = getattr(stats, "starttime", None)
+
         duration = None
         if isinstance(npts, Number) and isinstance(delta, Number):
             duration = float(npts) * float(delta)
+
         parts = [f"station={station}", f"channel={channel}"]
         if sampling_rate:
-            parts.append(f"fs={sampling_rate}")
+            parts.append(f"fs={sampling_rate:.1f} Hz")
         elif delta:
             parts.append(f"delta={delta}")
         if duration is not None:
-            parts.append(f"duration={duration:.2f}s")
+            parts.append(f"duration={duration:.1f}s")
         if isinstance(npts, Number):
             parts.append(f"samples={int(npts)}")
         if start:
             parts.append(f"start={start}")
+
+        # --- Signal metrics ---
+        data = getattr(trace, "data", None)
+        if data is not None:
+            try:
+                arr = np.asarray(data, dtype=float)
+                if arr.size > 10:
+                    pga = float(np.max(np.abs(arr)))
+                    rms = float(np.sqrt(np.mean(arr ** 2)))
+                    parts.append(f"PGA={pga:.2f} counts")
+                    parts.append(f"RMS={rms:.2f} counts")
+
+                    # Rough SNR: compare last 10 % (assumed noise) to max amplitude
+                    noise_len = max(1, arr.size // 10)
+                    noise_rms = float(np.sqrt(np.mean(arr[-noise_len:] ** 2)))
+                    if noise_rms > 0:
+                        snr_db = 20.0 * np.log10(pga / noise_rms)
+                        parts.append(f"SNR≈{snr_db:.1f} dB")
+
+                    # Dominant frequency via FFT (skip DC bin)
+                    if sampling_rate > 0:
+                        win = np.hanning(arr.size)
+                        spec = np.abs(np.fft.rfft(arr * win))
+                        freqs = np.fft.rfftfreq(arr.size, d=1.0 / sampling_rate)
+                        if spec.size > 1:
+                            dom_idx = int(np.argmax(spec[1:])) + 1
+                            parts.append(f"f_dom={freqs[dom_idx]:.2f} Hz")
+            except Exception:
+                pass  # métricas opcionales — no interrumpir flujo
+
         lines.append(f"- {label}: " + ", ".join(str(p) for p in parts if p))
+
+    # Append picks summary
+    if picks_list:
+        lines.append("")
+        lines.append("Picks registrados:")
+        for pk in picks_list:
+            p_station = pk.get("station", "?")
+            p_channel = pk.get("channel", "?")
+            p_phase = pk.get("phase", "?")
+            p_time = pk.get("time_rel", "?")
+            lines.append(f"  {p_phase} @ {p_time}s — {p_station}.{p_channel}")
+
     detail = "\n".join(lines)
     if base and detail:
         return f"{base}\n\n{detail}"
@@ -131,7 +181,7 @@ def main() -> None:
     current_dataset = get_current_stream_name(session=session)
     if dataset_names:
         selected_dataset = st.selectbox(
-            "Active dataset",
+            "Dataset activo",
             options=dataset_names,
             index=dataset_names.index(current_dataset) if current_dataset in dataset_names else 0,
             key="waveform_active_dataset",
@@ -139,8 +189,12 @@ def main() -> None:
         if selected_dataset and selected_dataset != current_dataset:
             set_current_stream(selected_dataset, session=session)
             current_dataset = selected_dataset
+        else:
+            # Siempre intentar refrescar la caché al entrar a la página,
+            # por si el stream se perdió tras hot-reload de Streamlit.
+            set_current_stream(current_dataset or selected_dataset, session=session)
 
-    uploaded_files = seismic_file_uploader("Upload seismic files", accept_multiple=False)
+    uploaded_files = seismic_file_uploader("Subir archivos sísmicos", accept_multiple=False)
     if uploaded_files:
         uploaded_file = uploaded_files[0]
         with st.spinner("Cargando archivo sísmico..."):
@@ -151,9 +205,9 @@ def main() -> None:
                 return
 
             register_stream(stream=loaded.stream, name=uploaded_file.name, summary=loaded.summary)
-            st.success(f"Loaded file: {session.dataset_name}")
-            with st.expander("Stream summary"):
-                st.code(session.stream_summary or "No summary available", language="text")
+            st.success(f"Cargado: {session.dataset_name}")
+            with st.expander("Resumen del stream"):
+                st.code(session.stream_summary or "Sin resumen disponible", language="text")
 
     kelunji_location = session.metadata.get("kelunji_last")
     if kelunji_location:
@@ -270,7 +324,6 @@ def main() -> None:
                         st_station = getattr(stats_active, 'station', 'UNK')
                         sr = float(getattr(stats_active, 'sampling_rate', 0) or 0)
                         if sr > 0:
-                            import numpy as np
                             try:
                                 ml_result_wa = estimate_local_magnitude_wa(
                                     picks=current_picks,
@@ -279,15 +332,20 @@ def main() -> None:
                                     station=st_station,
                                 )
                                 if ml_result_wa.ml is not None:
-                                    st.success(
-                                        f"ML (WA aprox) {ml_result_wa.ml:.2f} - DeltaP-S {ml_result_wa.delta_ps:.2f}s - Dist~{ml_result_wa.distance_km:.1f} km"
+                                    unc = ml_result_wa.ml_uncertainty
+                                    unc_str = f" ± {unc:.1f}" if unc is not None else ""
+                                    st.warning(
+                                        f"**ML ≈ {ml_result_wa.ml:.1f}{unc_str}** (preliminar)  \n"
+                                        f"ΔP-S {ml_result_wa.delta_ps:.2f}s · Dist≈{ml_result_wa.distance_km:.0f} km  \n"
+                                        f"⚠️ Estimación de una sola estación sin respuesta instrumental corregida. "
+                                        f"No publicar sin red multi-estación y calibración regional."
                                     )
                                     if ml_result_wa.warnings:
-                                        with st.expander("Detalles ML / Advertencias"):
+                                        with st.expander("Detalles del cálculo ML"):
                                             for warning in ml_result_wa.warnings:
                                                 st.write(f"- {warning}")
                                 else:
-                                    st.caption(f"ML (WA aprox) no disponible: {ml_result_wa.notes}")
+                                    st.caption(f"ML no disponible: {ml_result_wa.notes}")
                             except Exception as exc:
                                 handle_error(exc, context="Estimación ML WA")
 
@@ -311,6 +369,180 @@ def main() -> None:
 
             if active_trace is not None:
                 st.caption(f"Trace seleccionada: {get_selected_trace_label(session)}")
+
+            # ── Control de Calidad V1 ──────────────────────────────────────
+            with st.expander("🔍 Control de Calidad de Señal (QC — V1)", expanded=False):
+                st.caption(
+                    "Evalúa la calidad del registro crudo (V0) antes de procesar. "
+                    "Estándar COSMOS: detecta saturación, SNR bajo, gaps y deriva de baseline."
+                )
+                qc_col1, qc_col2 = st.columns([1, 1])
+                run_qc_btn = qc_col1.button("Ejecutar QC en todas las trazas", key="run_qc_btn")
+                ds_key = current_dataset or "unknown"
+
+                if run_qc_btn:
+                    qc_results_dict = {}
+                    for lbl, tr in zip(selected_labels, traces_to_plot):
+                        try:
+                            result = run_qc(tr)
+                            qc_results_dict[lbl] = {
+                                "verdict": result.verdict,
+                                "snr_db": result.snr_db,
+                                "clip_ratio": result.clip_ratio,
+                                "n_gaps": result.n_gaps,
+                                "drift_pct": result.drift_magnitude_pct,
+                                "duration_s": result.duration_s,
+                                "reasons": result.reasons,
+                                "markdown": qc_summary_markdown(result),
+                            }
+                        except Exception as exc:
+                            qc_results_dict[lbl] = {"verdict": "ERROR", "error": str(exc)}
+                    set_qc_results(ds_key, qc_results_dict, session=session)
+                    mark_pipeline_step("V1_qc", session=session)
+                    st.rerun()
+
+                saved_qc = get_qc_results(ds_key, session=session)
+                if saved_qc:
+                    _VERDICT_COLORS = {
+                        "ACEPTADO": "🟢", "CONDICIONADO": "🟡", "RECHAZADO": "🔴",
+                    }
+                    import pandas as _pd
+                    rows = []
+                    for lbl, qc in saved_qc.items():
+                        if qc.get("verdict") == "ERROR":
+                            rows.append({"Traza": lbl, "Veredicto": "❌ ERROR",
+                                         "SNR (dB)": "—", "Sat %": "—", "Gaps": "—", "Drift %": "—"})
+                        else:
+                            rows.append({
+                                "Traza": lbl,
+                                "Veredicto": f"{_VERDICT_COLORS.get(qc['verdict'], '⚪')} {qc['verdict']}",
+                                "SNR (dB)": f"{qc['snr_db']:.1f}",
+                                "Sat %": f"{qc['clip_ratio']*100:.2f}",
+                                "Gaps": str(qc["n_gaps"]),
+                                "Drift %": f"{qc['drift_pct']:.1f}",
+                            })
+                    st.dataframe(_pd.DataFrame(rows).set_index("Traza"), use_container_width=True)
+
+                    with st.expander("Ver detalles por traza", expanded=False):
+                        for lbl, qc in saved_qc.items():
+                            if md := qc.get("markdown"):
+                                st.markdown(md)
+                            elif err := qc.get("error"):
+                                st.error(f"{lbl}: {err}")
+                else:
+                    st.info("Haz clic en **Ejecutar QC** para evaluar la calidad de las trazas cargadas.")
+
+            # ── Corrección de línea de base ────────────────────────────────
+            with st.expander("🔧 Corrección de Línea de Base (Baseline — V1)", expanded=False):
+                st.caption(
+                    "Paso V1 estándar COSMOS: elimina deriva DC antes de integrar "
+                    "para obtener velocidad y desplazamiento precisos."
+                )
+                bc_method = st.selectbox(
+                    "Método",
+                    options=["linear", "mean", "polynomial"],
+                    format_func=lambda x: {
+                        "mean": "Orden 0 — resta media",
+                        "linear": "Orden 1 — tendencia lineal (recomendado)",
+                        "polynomial": "Orden 2 — polinomial cuadrática",
+                    }[x],
+                    index=0,
+                    key="bc_method",
+                )
+                poly_order = 2
+                if bc_method == "polynomial":
+                    poly_order = st.slider("Orden polinomio", 2, 4, 2, key="bc_poly_order")
+
+                # ── Preview antes/después ──────────────────────────────────
+                if active_trace is not None:
+                    try:
+                        import plotly.graph_objects as _go_bc
+                        orig = np.asarray(active_trace.data, dtype=float)
+                        preview = remove_baseline(orig, method=bc_method, poly_order=poly_order)
+                        dt_bc = float(active_trace.stats.delta)
+                        t_bc  = np.arange(len(orig)) * dt_bc
+                        fig_bc = _go_bc.Figure()
+                        fig_bc.add_trace(_go_bc.Scatter(
+                            x=t_bc, y=orig, mode="lines", name="Original",
+                            line=dict(color="#636e72", width=1),
+                        ))
+                        fig_bc.add_trace(_go_bc.Scatter(
+                            x=t_bc, y=preview, mode="lines", name="Corregida",
+                            line=dict(color="#55efc4", width=1.5),
+                        ))
+                        fig_bc.update_layout(
+                            template="plotly_dark",
+                            xaxis_title="Tiempo (s)", yaxis_title="Amplitud",
+                            height=220, margin=dict(t=10, b=30, l=40, r=10),
+                            legend=dict(x=0.01, y=0.99),
+                            hovermode="x unified",
+                        )
+                        st.plotly_chart(fig_bc, use_container_width=True, key="bc_preview_chart")
+                    except Exception:
+                        pass
+
+                apply_bc = st.button("Aplicar corrección al trace activo", key="apply_baseline")
+                if apply_bc and active_trace is not None:
+                    try:
+                        corrected = remove_baseline(
+                            np.asarray(active_trace.data, dtype=float),
+                            method=bc_method,
+                            poly_order=poly_order,
+                        )
+                        active_trace.data = corrected
+                        # Regenerar el stream en caché con la traza corregida
+                        clear_trace_cache(session=session)
+                        mark_pipeline_step("V1_filtered", session=session)
+                        st.success("Corrección aplicada.")
+                        st.rerun()
+                    except Exception as exc:
+                        handle_error(exc, context="Baseline correction")
+
+            # ── Parámetros de Intensidad Sísmica (IMs) ────────────────────
+            with st.expander("📊 Parámetros de Intensidad Sísmica (IMs)", expanded=True):
+                if active_trace is not None:
+                    import pandas as pd
+
+                    # Calcular IMs para todas las trazas seleccionadas
+                    all_im_rows = []
+                    for lbl, tr in zip(selected_labels, traces_to_plot):
+                        try:
+                            ims = compute_all_ims(tr)
+                            row = {"Traza": lbl}
+                            row.update({
+                                k: (f"{v:.4g}" if v is not None else "—")
+                                for k, v in ims.to_dict().items()
+                            })
+                            all_im_rows.append(row)
+                            if ims.warnings:
+                                for w in ims.warnings:
+                                    st.caption(f"⚠️ {lbl}: {w}")
+                        except Exception as exc:
+                            st.caption(f"Error calculando IMs para {lbl}: {exc}")
+
+                    if all_im_rows:
+                        mark_pipeline_step("V2_ims", session=session)
+                        df_ims = pd.DataFrame(all_im_rows).set_index("Traza")
+                        st.dataframe(df_ims.T, use_container_width=True)
+
+                        # Botón de exportación a Excel
+                        try:
+                            import io
+                            buf = io.BytesIO()
+                            df_ims.T.to_excel(buf, sheet_name="IMs")
+                            st.download_button(
+                                "⬇️ Exportar IMs a Excel",
+                                data=buf.getvalue(),
+                                file_name=f"IMs_{session.dataset_name or 'dataset'}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                key="dl_ims_excel",
+                            )
+                        except ImportError:
+                            st.caption("Instala `openpyxl` para exportar a Excel.")
+                    else:
+                        st.info("No se pudieron calcular IMs para las trazas seleccionadas.")
+                else:
+                    st.info("Selecciona una traza para calcular los parámetros de intensidad.")
 
         with col_ai:
             st.subheader("Interprete IA")
@@ -362,7 +594,18 @@ def main() -> None:
                     else:
                         st.info("El interprete IA aun no tiene resultados para este dataset.")
     else:
-        st.info("No hay waveforms activos. Carga archivos desde la pagina 📁 Uploader.")
+        if dataset_names:
+            # Hay datasets registrados en sesión pero el stream no está en la caché
+            # en memoria (ocurre tras hot-reload de Streamlit). El usuario debe volver
+            # a cargar los datos desde la página original.
+            st.warning(
+                f"El dataset **`{current_dataset}`** está registrado en la sesión "
+                "pero sus datos no están disponibles en memoria. "
+                "Esto ocurre cuando Streamlit se recarga. "
+                "Ve a **Batch Loader** (pág. 01) o **Uploader** (pág. 00) y vuelve a cargar los archivos."
+            )
+        else:
+            st.info("No hay waveforms activos. Carga archivos desde **Uploader** (pág. 00) o **Batch Loader** (pág. 01).")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
