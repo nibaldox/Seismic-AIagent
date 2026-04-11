@@ -33,32 +33,68 @@ st.set_page_config(page_title="Spectrum Analysis", page_icon="🔍")
 
 
 def _get_agent_suite():
-    """Get AI agents for spectrum analysis."""
-    if "ai_agents" in st.session_state:
-        return st.session_state["ai_agents"]
-    try:
-        agents = load_agent_suite()
-        st.session_state["ai_agents"] = agents
-        st.session_state.pop("ai_agents_error", None)
-        return agents
-    except Exception as exc:
-        st.session_state["ai_agents_error"] = str(exc)
-        st.session_state["ai_agents"] = {}
-        return {}
+    """Get AI agents for spectrum analysis with dynamic model selection."""
+    # Obtener modelo seleccionado desde session_state
+    selected_model = st.session_state.get("selected_ai_model", "deepseek/deepseek-chat-v3.1:free")
+    
+    # Usar clave de caché basada en el modelo para evitar recreación innecesaria
+    cache_key = f"ai_agents_{selected_model.replace('/', '_').replace(':', '_')}"
+    
+    if cache_key not in st.session_state:
+        try:
+            # Crear configuración dinámica para el modelo seleccionado si existe
+            try:
+                from src.ai_agent.dynamic_config import get_dynamic_config_path
+                dynamic_config_path = get_dynamic_config_path(selected_model)
+                agents = load_agent_suite(dynamic_config_path)
+            except ImportError:
+                # Fallback a configuración estática si dynamic_config no está disponible
+                agents = load_agent_suite()
+            
+            st.session_state[cache_key] = agents
+            st.session_state.pop("ai_agents_error", None)
+            
+            # Limpiar cachés de otros modelos para liberar memoria
+            keys_to_remove = [k for k in st.session_state.keys() if isinstance(k, str) and k.startswith("ai_agents_") and k != cache_key]
+            for k in keys_to_remove:
+                del st.session_state[k]
+                
+        except Exception as exc:
+            st.session_state["ai_agents_error"] = str(exc)
+            st.session_state[cache_key] = {}
+    
+    return st.session_state.get(cache_key, {})
 
 
 def _build_trace_context(trace, analysis_type: str, analysis_params: dict) -> tuple[dict, dict]:
     """Build context for AI analysis of spectral data."""
+    
+    # Helper para conversión segura a JSON
+    def to_json_safe(value):
+        if value is None:
+            return None
+        # Manejar UTCDateTime de ObsPy
+        if hasattr(value, 'isoformat'):
+            return value.isoformat()
+        elif hasattr(value, '__str__'):
+            return str(value)
+        return value
+    
     # Trace information
     trace_info = {}
     if hasattr(trace, 'stats'):
         stats = trace.stats
-        trace_info['station'] = getattr(stats, 'station', 'Unknown')
-        trace_info['channel'] = getattr(stats, 'channel', 'Unknown')  
+        trace_info['station'] = to_json_safe(getattr(stats, 'station', 'Unknown'))
+        trace_info['channel'] = to_json_safe(getattr(stats, 'channel', 'Unknown'))  
         trace_info['sampling_rate'] = f"{getattr(stats, 'sampling_rate', 0)} Hz"
         trace_info['npts'] = getattr(stats, 'npts', 0)
+        
+        # Conversión segura de timestamps
         if hasattr(stats, 'starttime'):
-            trace_info['start_time'] = str(stats.starttime)
+            trace_info['start_time'] = to_json_safe(stats.starttime)
+        if hasattr(stats, 'endtime'):
+            trace_info['end_time'] = to_json_safe(stats.endtime)
+            
         if hasattr(stats, 'delta') and hasattr(stats, 'npts'):
             duration = stats.delta * stats.npts
             trace_info['duration'] = f"{duration:.2f} seconds"
@@ -72,7 +108,7 @@ def _build_trace_context(trace, analysis_type: str, analysis_params: dict) -> tu
             else:
                 formatted_params[key] = f"{value:.3f}"
         else:
-            formatted_params[key] = str(value)
+            formatted_params[key] = to_json_safe(value)
     
     return trace_info, formatted_params
 

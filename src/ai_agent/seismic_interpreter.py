@@ -9,7 +9,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Optional, List
 
-from src.utils.config import load_yaml, ConfigError
+from src.utils.config import load_yaml, load_agent_config, ConfigError
 from src.utils.logger import setup_logger
 from .artifacts import Factbase, Finding
 from .earthquake_search import EarthquakeSearcher, EarthquakeQuery
@@ -87,104 +87,118 @@ class TeamSeismicAnalysis:
             invalid_keys = [k for k, v in agents.items() if v is None]
             LOGGER.warning("Filtered out None agents: %s", invalid_keys)
 
-        # Definir roles de miembros del equipo y sus responsabilidades
+        # Definir roles de miembros del equipo (flujo V0→V3)
         team_members = []
         member_instructions = {}
 
-        # Agente de Análisis de Telemetría/Histogramas
-        telemetry_agent = valid_agents.get("telemetry_analysis") or valid_agents.get("histogram_analysis")
-        if telemetry_agent:
-            team_members.append(telemetry_agent)
-            member_instructions[telemetry_agent.name] = [
-                "Analista de telemetria operativo",
-                "Detecta patrones, anomalias y estado del equipo en datos de telemetria",
-                "Proporciona interpretacion concisa con recomendaciones practicas",
-                "Incluye nivel de confianza del analisis"
+        # Agente QC (V0→V1) — nuevo agente principal
+        qc_agent = valid_agents.get("qc_agent")
+        if qc_agent:
+            team_members.append(qc_agent)
+            member_instructions[qc_agent.name] = [
+                "Evaluador de calidad del registro (COSMOS V1)",
+                "Emite veredicto ACEPTADO/CONDICIONADO/RECHAZADO con justificación numérica",
             ]
 
-        # Agente de Análisis de Formas de Onda
-        waveform_agent = valid_agents.get("waveform_analysis")
-        if waveform_agent:
-            team_members.append(waveform_agent)
-            member_instructions[waveform_agent.name] = [
-                "Interprete de formas de onda operativo",
-                "Identifica tipo de actividad sismica y calidad de senales",
-                "Proporciona interpretacion directa sin jerga tecnica compleja",
-                "Incluye recomendaciones practicas para personal operativo"
+        # Agente de Procesamiento (V1→V2)
+        processing_agent = valid_agents.get("processing_agent")
+        if processing_agent:
+            team_members.append(processing_agent)
+            member_instructions[processing_agent.name] = [
+                "Especialista en procesamiento de acelerogramas (COSMOS V2)",
+                "Recomienda fc_low, fc_high y método de corrección de baseline",
             ]
 
-        # Agente de Búsqueda de Terremotos
+        # Agente de IMs (V2→V3)
+        ims_agent = valid_agents.get("ims_agent")
+        if ims_agent:
+            team_members.append(ims_agent)
+            member_instructions[ims_agent.name] = [
+                "Intérprete de medidas de intensidad (PGA, PGV, Ia, CAV, RotD50)",
+                "Detecta valores atípicos y contextualiza para zona andina de Chile",
+            ]
+
+        # Agente Normativo
+        norms_agent = valid_agents.get("norms_agent")
+        if norms_agent:
+            team_members.append(norms_agent)
+            member_instructions[norms_agent.name] = [
+                "Especialista en comparación espectral vs NCh433/ASCE7",
+                "Identifica excedencias y estructuras afectadas",
+            ]
+
+        # Agente de Catálogo (earthquake_search — mantiene compat con run_team_analysis)
         eq_agent = valid_agents.get("earthquake_search")
         if eq_agent:
             team_members.append(eq_agent)
             member_instructions[eq_agent.name] = [
-                "Especialista en catalogos sismicos operativo",
-                "Consulta bases de datos para contexto regional de eventos",
-                "Identifica correlaciones entre detecciones locales y sismicidad regional",
-                "Proporciona contexto sismico relevante para toma de decisiones"
+                "Especialista en catálogos sísmicos USGS/EMSC/CSN",
+                "Asocia el registro con el evento más probable y calcula Repi/Rhypo",
             ]
 
-        # Agente de Control de Calidad/Crítico
-        critic_agent = valid_agents.get("critic_qa") or valid_agents.get("quality_assurance")
+        # Agente QA (quality_assurance — mantiene compat)
+        critic_agent = valid_agents.get("quality_assurance") or valid_agents.get("critic_qa")
         if critic_agent:
             team_members.append(critic_agent)
             member_instructions[critic_agent.name] = [
-                "Auditor de consistencia operativo",
-                "Revisa analisis por contradicciones y datos faltantes",
-                "Identifica aspectos que requieren clarificacion adicional",
-                "Propone validaciones cruzadas entre diferentes analisis"
+                "Auditor de consistencia global del análisis",
+                "Verifica P<S, PGD plausible, coherencia QC vs IMs, compatibilidad catálogo",
             ]
 
-        # Agente de Generación de Reportes
-        reporter_agent = valid_agents.get("reporter") or valid_agents.get("report_generation")
+        # Agente Sintetizador (report_generation — mantiene compat)
+        reporter_agent = valid_agents.get("report_generation") or valid_agents.get("reporter")
         if reporter_agent:
             team_members.append(reporter_agent)
             member_instructions[reporter_agent.name] = [
-                "Sintetizador de informes operativos",
-                "Integra hallazgos en reporte coherente y conciso",
-                "Estructura informacion operativa con recomendaciones claras",
-                "Proporciona conclusiones practicas basadas en evidencia"
+                "Redactor del informe técnico con estructura COSMOS",
+                "Integra todos los análisis en un borrador coherente con METADATA estructurado",
             ]
 
-        # Validar que tenemos al menos un miembro del equipo
+        # Fallback: si no se encontró ningún agente del nuevo flujo, usar cualquier disponible
         if not team_members:
-            LOGGER.warning("No team members found in agent dictionary. Available agents: %s", list(valid_agents.keys()))
-            # Usar cualquier agente disponible como respaldo
-            fallback_agents = [valid_agents.get("waveform_analysis"), valid_agents.get("histogram_analysis")]
-            fallback_agent = next((agent for agent in fallback_agents if agent), None)
+            LOGGER.warning(
+                "No se encontraron agentes del flujo V0→V3. Agentes disponibles: %s",
+                list(valid_agents.keys()),
+            )
+            fallback_agent = next(iter(valid_agents.values()), None)
             if fallback_agent:
                 team_members.append(fallback_agent)
                 member_instructions[fallback_agent.name] = [
-                    "Analista general sismologico",
-                    "Proporciona analisis operativo conciso y recomendaciones practicas"
+                    "Analista sísmico general",
+                    "Proporciona análisis operativo conciso y recomendaciones prácticas",
                 ]
             else:
                 raise ValueError("No suitable agents found for team formation")
 
         self.team = Team(
-            name="Equipo de Analisis Sismico",
-            description="Equipo multi-agente especializado en analisis integral de datos sismicos",
+            name="Equipo de Análisis Sísmico",
+            description="Equipo multi-agente para análisis integral de acelerogramas (pipeline COSMOS V0→V3)",
             members=team_members,
-            respond_directly=False,  # El líder procesa las respuestas de los miembros
-            delegate_task_to_all_members=False,  # Delegación uno por uno para flujo estructurado
-            determine_input_for_members=True,  # El líder sintetiza entradas específicas
+            respond_directly=False,
+            delegate_task_to_all_members=False,
+            determine_input_for_members=True,
             instructions=[
-                "Coordina el analisis sismico siguiendo este flujo estructurado:",
-                "1. Analisis de telemetria/histogramas para detectar anomalias",
-                "2. Analisis de formas de onda para caracterizar senales",
-                "3. Busqueda de sismicidad historica cercana",
-                "4. Localizacion 1D si hay suficientes datos",
-                "5. Revision critica QA de hallazgos",
-                "6. Sintesis final del reporte",
+                "Coordina el análisis sísmico siguiendo el pipeline profesional COSMOS V0→V3:",
+                "1. [QC V1] Evalúa calidad del registro: SNR, saturación, gaps, deriva baseline",
+                "2. [Procesamiento V2] Recomienda fc_low, fc_high y corrección de baseline",
+                "3. [IMs V3] Interpreta tabla de medidas de intensidad y detecta atípicos",
+                "4. [Normas] Compara espectro vs NCh433/ASCE7, identifica excedencias",
+                "5. [Catálogo] Asocia el evento con USGS/EMSC, calcula Repi/Rhypo",
+                "6. [QA] Valida consistencia global: P<S, PGD plausible, coherencia catálogo",
+                "7. [Síntesis] Genera borrador de informe COSMOS con METADATA estructurado",
                 "",
-                "Cada agente debe proporcionar analisis operativo conciso en espanol",
-                "con nivel de confianza y recomendaciones practicas.",
-                "Manten consistencia factual y evita contradicciones entre analisis."
+                "Cada agente cita valores numéricos específicos de los datos entregados.",
+                "Mantén consistencia factual y señala cualquier contradicción explícitamente.",
+                "Responde siempre en español con terminología técnica precisa.",
             ] + [
-                f"Agente {agent.name}: {member_instructions.get(agent.name, ['Sin instrucciones especificas'])[0]}"
+                f"Agente {agent.name}: {member_instructions.get(agent.name, ['Sin instrucciones específicas'])[0]}"
                 for agent in team_members
             ],
-            expected_output="Informe completo en markdown con hallazgos operativos, explicaciones claras y recomendaciones practicas",
+            expected_output=(
+                "Informe técnico completo en markdown con estructura COSMOS: "
+                "veredicto QC, parámetros de procesamiento justificados, tabla de IMs, "
+                "comparación normativa, correlación con catálogo, y METADATA estructurado."
+            ),
             markdown=True,
         )
 
@@ -221,45 +235,26 @@ class TeamSeismicAnalysis:
                 "fallback_failed": True,
             }
 
-        # Ejecutar análisis de equipo con streaming avanzado
+        # Ejecutar análisis del equipo (una sola llamada — evita double-run)
         start_time = time.time()
-
-        # Usar streaming con pasos intermedios para actualizaciones en tiempo real
-        streaming_events = []
         final_result = None
 
         try:
-            # Ejecutar con streaming para capturar pasos intermedios
-            for event in self.team.run(prompt, stream=True):
-                if event is not None:
-                    streaming_events.append({
-                        "timestamp": time.time(),
-                        "event_type": getattr(event, "event_type", "unknown"),
-                        "content": getattr(event, "content", str(event)),
-                        "agent": getattr(event, "agent", None),
-                        "step": getattr(event, "step", None),
-                    })
-                    LOGGER.debug(f"Team event: {event}")
-
-            # Obtener resultado final
             final_result = self.team.run(prompt, stream=False)
             duration = time.time() - start_time
 
         except Exception as exc:
             duration = time.time() - start_time
-            LOGGER.error(f"Team analysis failed: {exc}")
-            # Respaldo a ejecución sin streaming
-            try:
-                final_result = self.team.run(prompt, stream=False)
-            except Exception as fallback_exc:
-                LOGGER.error(f"Fallback team analysis also failed: {fallback_exc}")
-                return {
-                    "markdown": f"Error en analisis de equipo: {exc}",
-                    "error": str(exc),
-                    "duration": duration,
-                    "team_mode": "coordinate",
-                    "fallback_failed": True,
-                }
+            error_type = _classify_error(exc)
+            LOGGER.error("Team analysis failed [%s]: %s", error_type, exc)
+            return {
+                "markdown": _error_message_for_user(error_type, exc),
+                "error": str(exc),
+                "error_type": error_type,
+                "duration": duration,
+                "team_mode": "coordinate",
+                "fallback_failed": True,
+            }
 
         record_agent_time(duration)
         avg_time = get_average_response_time()
@@ -279,8 +274,12 @@ class TeamSeismicAnalysis:
 
     def _build_analysis_prompt(self, context: Dict[str, Any]) -> str:
         """Build comprehensive analysis prompt from context data."""
+        analysis_ts = context.get("analysis_ts", "")
+        time_range = context.get("time_range") or "No disponible"
         prompt_parts = [
             "Realiza un analisis integral de datos sismicos coordinado por el equipo:",
+            f"Timestamp del análisis: {analysis_ts}",
+            f"Rango temporal de los datos: {time_range}",
             "",
             "## Datos Disponibles:"
         ]
@@ -303,7 +302,16 @@ class TeamSeismicAnalysis:
         if context.get("waveform_summary"):
             prompt_parts.extend([
                 f"### Formas de Onda",
+                f"Rango temporal: {time_range}",
                 f"{context['waveform_summary']}",
+                ""
+            ])
+
+        # Picks P/S disponibles
+        if context.get("picks"):
+            prompt_parts.extend([
+                f"### Picks P/S",
+                f"{context['picks']}",
                 ""
             ])
 
@@ -318,11 +326,38 @@ class TeamSeismicAnalysis:
                 ""
             ])
 
+        # Caracterización de sitio HVSR
+        if context.get("hvsr"):
+            hv = context["hvsr"]
+            sesame_ok = "VÁLIDA" if hv.get("sesame_valid") else "DUDOSA"
+            prompt_parts.extend([
+                "### Caracterizacion de Sitio (HVSR)",
+                f"- Frecuencia fundamental f0 = {hv.get('f0_hz')} Hz  →  T0 = {hv.get('T0_s')} s",
+                f"- Amplitud H/V en f0: {hv.get('amplitude')}",
+                f"- Ventanas analizadas: {hv.get('n_windows')}",
+                f"- Criterios SESAME: {sesame_ok}",
+                f"- Detalle: {hv.get('sesame_summary', '')}",
+                "",
+            ])
+
+        # Espectro RotD50 / RotD100
+        if context.get("rotd50"):
+            rd = context["rotd50"]
+            prompt_parts.extend([
+                "### Espectro de Respuesta RotD50 (PEER)",
+                f"- Componentes: {rd.get('comp1')} y {rd.get('comp2')}",
+                f"- Amortiguamiento: {rd.get('damping_pct')}%",
+                f"- RotD50 maximo: {rd.get('rotd50_max_cms2')} cm/s² "
+                f"en T={rd.get('T_at_rotd50_max_s')} s",
+                f"- RotD100 maximo: {rd.get('rotd100_max_cms2')} cm/s²",
+                "",
+            ])
+
         # Parámetros de búsqueda de terremotos
         if context.get("eq_search"):
             eq = context["eq_search"]
             prompt_parts.extend([
-                f"### Busqueda de Sismicidad",
+                "### Busqueda de Sismicidad",
                 f"- Centro: {eq.get('latitude')}, {eq.get('longitude')}",
                 f"- Radio: {eq.get('radius_km', 100)} km",
                 f"- Periodo: {eq.get('days', 30)} dias",
@@ -336,8 +371,12 @@ class TeamSeismicAnalysis:
             "2. **Analisis de Ondas**: Identifica tipo de actividad sismica y calidad de senales",
             "3. **Catalogo Sismico**: Busca contexto regional de eventos relevantes",
             "4. **Localizacion**: Estima epicentro si hay datos suficientes",
-            "5. **Revision Critica**: Identifica contradicciones o validaciones necesarias",
-            "6. **Sintesis Final**: Integra hallazgos en reporte coherente y conciso",
+            "5. **Caracterizacion de Sitio**: Si hay datos HVSR, interpreta f0/T0 en contexto "
+            "geologico local; evalua si la frecuencia de resonancia es relevante para el evento",
+            "6. **Demanda Sismica**: Si hay RotD50, compara con espectros de diseño y evalua "
+            "nivel de excitacion respecto a normativas aplicables",
+            "7. **Revision Critica**: Identifica contradicciones o validaciones necesarias",
+            "8. **Sintesis Final**: Integra hallazgos en reporte coherente y conciso",
             "",
             "## Formato de Salida:",
             "- **Interpretacion operativa directa** sobre actividad detectada",
@@ -349,6 +388,54 @@ class TeamSeismicAnalysis:
         ])
 
         return "\n".join(prompt_parts)
+
+
+def _classify_error(exc: Exception) -> str:
+    """Clasifica un error de llamada al agente en categorías accionables."""
+    msg = str(exc).lower()
+    # TimeoutError debe verificarse ANTES de OSError (TimeoutError hereda de OSError en Py3)
+    if isinstance(exc, TimeoutError) or "timeout" in msg or "timed out" in msg:
+        return "timeout"
+    if isinstance(exc, (ConnectionError, OSError)) or "connection" in msg or "network" in msg:
+        return "connection"
+    if "401" in msg or "unauthorized" in msg or "api key" in msg or "invalid key" in msg:
+        return "auth"
+    if "429" in msg or "rate limit" in msg or "too many requests" in msg:
+        return "rate_limit"
+    if "quota" in msg or "insufficient_quota" in msg or "credits" in msg:
+        return "quota"
+    return "unknown"
+
+
+def _error_message_for_user(error_type: str, exc: Exception) -> str:
+    """Genera un mensaje de error en español apropiado para mostrar en la UI."""
+    messages = {
+        "connection": (
+            "**Error de conexión** — No se pudo conectar con el servicio de IA.\n\n"
+            "Verifica tu conexión a internet y que OpenRouter esté disponible."
+        ),
+        "timeout": (
+            "**Tiempo de espera agotado** — El modelo tardó demasiado en responder.\n\n"
+            "Intenta con un modelo más rápido (p.ej. DeepSeek o Kimi) o reduce el contexto."
+        ),
+        "auth": (
+            "**Error de autenticación** — La API key no es válida o no tiene permisos.\n\n"
+            "Verifica `OPENROUTER_API_KEY` en tu archivo `.env`."
+        ),
+        "rate_limit": (
+            "**Límite de solicitudes alcanzado** — El modelo gratuito tiene límite de llamadas por minuto.\n\n"
+            "Espera 30-60 segundos e intenta de nuevo, o selecciona otro modelo."
+        ),
+        "quota": (
+            "**Cuota agotada** — Se superó el límite de tokens o créditos del modelo seleccionado.\n\n"
+            "Selecciona un modelo diferente o recarga tus créditos en OpenRouter."
+        ),
+        "unknown": (
+            f"**Error inesperado** en el análisis de equipo.\n\n"
+            f"Detalle técnico: `{exc}`"
+        ),
+    }
+    return messages.get(error_type, messages["unknown"])
 
 
 def get_average_response_time() -> Optional[float]:
@@ -416,7 +503,8 @@ def create_agent(
         "instructions": [spec.instructions],
         "expected_output": output_format,
         "markdown": True,
-        "debug_mode": False,  # Establecer a True durante desarrollo para logs detallados
+        "debug_mode": False,
+        "telemetry": False,  # Desactivar telemetría a api.agno.com (evita error "user not found")
     }
     
     # Agregar herramientas si están disponibles
@@ -482,26 +570,17 @@ def load_agent_suite(config_path: str = "agents_config.yaml") -> Dict[str, "Agno
     """Load and instantiate the agent suite defined in YAML configuration."""
 
     try:
-        # Probar primero la nueva estructura agents_config.yaml
-        agent_config = load_yaml(config_path)
-        
-        # Verificar si tenemos la nueva estructura (sección agents:)
-        if "agents" in agent_config:
-            LOGGER.info("Using new agents_config.yaml structure")
-            return _load_agents_from_new_config(agent_config)
-        else:
-            LOGGER.warning("agents_config.yaml found but no 'agents' section. Falling back to legacy structure.")
-            return _load_agents_from_legacy_config(agent_config)
-            
-    except (FileNotFoundError, ConfigError):
-        LOGGER.warning(f"Primary config file '{config_path}' not found. Falling back to agno_config.yaml")
-        # Respaldo al archivo de configuración antiguo
-        try:
-            agent_config = load_yaml("agno_config.yaml")
-            return _load_agents_from_legacy_config(agent_config)
-        except FileNotFoundError:
-            LOGGER.error("Neither agents_config.yaml nor agno_config.yaml found!")
-            raise FileNotFoundError("No agent configuration files found!")
+        agent_config = load_agent_config(primary=config_path)
+    except ConfigError as exc:
+        LOGGER.error("No se encontró ningún archivo de configuración de agentes: %s", exc)
+        raise FileNotFoundError(str(exc)) from exc
+
+    if "agents" in agent_config:
+        LOGGER.info("Usando estructura agents_config.yaml (sección 'agents')")
+        return _load_agents_from_new_config(agent_config)
+    else:
+        LOGGER.warning("Configuración cargada sin sección 'agents'. Usando estructura legacy.")
+        return _load_agents_from_legacy_config(agent_config)
 
 
 def _load_agents_from_new_config(config: Dict[str, Any]) -> Dict[str, "AgnoAgent"]:
@@ -695,15 +774,25 @@ def _load_agents_from_legacy_config(config: Dict[str, Any]) -> Dict[str, "AgnoAg
 
 
 def _map_agent_to_task_name(agent_key: str) -> str:
-    """Map new agent keys to expected task names for backward compatibility."""
+    """Map agent YAML keys to internal task names used by TeamSeismicAnalysis."""
     mapping = {
+        # Nuevos agentes V0→V3
+        "qc_agent": "qc_agent",
+        "processing_agent": "processing_agent",
+        "ims_agent": "ims_agent",
+        "norms_agent": "norms_agent",
+        "catalog_agent": "earthquake_search",      # compat con run_team_analysis
+        "synthesizer_agent": "report_generation",  # compat con run_team_analysis
+        "qa_agent": "quality_assurance",           # compat con run_team_analysis
+        # Agente de magnitud (página 10, independiente)
+        "magnitude_estimator": "magnitude_estimation",
+        # Legacy (por si se carga un config antiguo)
         "waveform_analyzer": "waveform_analysis",
-        "histogram_analyzer": "histogram_analysis", 
+        "histogram_analyzer": "histogram_analysis",
         "earthquake_correlator": "earthquake_search",
         "report_synthesizer": "report_generation",
         "quality_assurance": "quality_assurance",
         "spectrum_analyzer": "spectrum_analysis",
-        # Agregar más mapeos según sea necesario
     }
     return mapping.get(agent_key, agent_key)
 
@@ -750,6 +839,157 @@ def run_primary_analysis(agents: Dict[str, "AgnoAgent"], summary: str) -> Option
     LOGGER.info(f"Agent response time: {duration:.2f}s, Average: {avg_time:.2f}s" if avg_time else f"Agent response time: {duration:.2f}s")
     
     _monitor_event("agent_run_complete", task="waveform_analysis")
+    return getattr(result, "content", None)
+
+
+def run_qc_agent(
+    agents: Dict[str, "AgnoAgent"],
+    qc_results: Dict[str, Any],
+) -> Optional[str]:
+    """Ejecutar el agente QC con resultados de control de calidad.
+
+    Args:
+        agents: Diccionario de agentes obtenido via ``get_agent_suite()``.
+        qc_results: Dict con métricas QC por traza, tal como lo devuelve
+            ``run_qc()`` o lo guarda ``set_qc_results()``.
+            Esperadas claves: ``snr_db``, ``clip_ratio``, ``n_gaps``,
+            ``drift_pct``, ``duration_s``, ``verdict``, ``reasons``.
+
+    Returns:
+        Markdown con interpretación QC del agente, o ``None`` si
+        el agente no está disponible.
+    """
+    agent = agents.get("qc_agent")
+    if agent is None:
+        LOGGER.warning("qc_agent no configurado.")
+        return None
+
+    lines = ["## Métricas de Control de Calidad (V0→V1)", ""]
+    for trace_id, metrics in qc_results.items():
+        verdict = metrics.get("verdict", "DESCONOCIDO")
+        snr = metrics.get("snr_db", 0.0)
+        clip = metrics.get("clip_ratio", 0.0)
+        gaps = metrics.get("n_gaps", 0)
+        drift = metrics.get("drift_pct", 0.0)
+        duration = metrics.get("duration_s", 0.0)
+        reasons = metrics.get("reasons", [])
+
+        lines.append(f"### {trace_id}")
+        lines.append(f"- **Veredicto:** {verdict}")
+        lines.append(f"- SNR: {snr:.1f} dB")
+        lines.append(f"- Saturación: {clip*100:.2f}%")
+        lines.append(f"- Gaps: {gaps}")
+        lines.append(f"- Deriva baseline: {drift:.1f}%")
+        lines.append(f"- Duración: {duration:.1f}s")
+        if reasons:
+            lines.append(f"- **Motivos:** {'; '.join(str(r) for r in reasons)}")
+        lines.append("")
+
+    qc_block = "\n".join(lines)
+    prompt = (
+        "Eres un sismólogo experto en control de calidad de registros sísmicos "
+        "(estándar COSMOS V0→V1).\n\n"
+        "INSTRUCCIONES:\n"
+        "- Evalúa las métricas de calidad entregadas.\n"
+        "- Emite veredicto ACEPTADO, CONDICIONADO o RECHAZADO según: "
+        "RECHAZADO si SNR<3 dB o saturación>5%; "
+        "CONDICIONADO si SNR 3-6 dB, gaps detectados, deriva>5%; "
+        "ACEPTADO en otro caso.\n"
+        "- Explica el impacto de cada problema en los parámetros derivados (IMs, espectros).\n"
+        "- Indica correcciones necesarias si CONDICIONADO.\n"
+        "- Cita siempre valores numéricos. Responde en español.\n\n"
+        f"{qc_block}\n\n"
+        "INTERPRETACIÓN QC:"
+    )
+    _monitor_event("agent_run", task="qc_agent")
+    start_time = time.time()
+    try:
+        result = agent.run(prompt)
+    except Exception as exc:
+        LOGGER.error("Falló qc_agent: %s", exc)
+        _monitor_event("agent_run_failed", task="qc_agent", extra={"message": str(exc)})
+        return None
+    duration = time.time() - start_time
+    record_agent_time(duration)
+    _monitor_event("agent_run_complete", task="qc_agent")
+    return getattr(result, "content", None)
+
+
+def run_processing_agent(
+    agents: Dict[str, "AgnoAgent"],
+    qc_results: Optional[Dict[str, Any]] = None,
+    spectrum_summary: Optional[str] = None,
+    ims_table: Optional[str] = None,
+) -> Optional[str]:
+    """Ejecutar el agente de procesamiento con contexto V1→V2.
+
+    Args:
+        agents: Diccionario de agentes obtenido via ``get_agent_suite()``.
+        qc_results: Métricas QC opcionales para informar la recomendación.
+        spectrum_summary: Resumen espectral opcional (fas, freq dominantes, etc.).
+        ims_table: Tabla de IMs opcional en formato string.
+
+    Returns:
+        Markdown con parámetros de procesamiento recomendados, o ``None``
+        si ``processing_agent`` no está disponible.
+    """
+    agent = agents.get("processing_agent")
+    if agent is None:
+        LOGGER.warning("processing_agent no configurado.")
+        return None
+
+    sections = ["## Contexto para Recomendación de Procesamiento (V1→V2)", ""]
+
+    if qc_results:
+        lines = []
+        for trace_id, m in qc_results.items():
+            lines.append(
+                f"- {trace_id}: SNR={m.get('snr_db', 0):.1f} dB, "
+                f"sat={m.get('clip_ratio', 0)*100:.2f}%, "
+                f"drift={m.get('drift_pct', 0):.1f}%, "
+                f"gaps={m.get('n_gaps', 0)}"
+            )
+        sections.append("### Resultados QC (V0→V1)")
+        sections.extend(lines)
+        sections.append("")
+
+    if spectrum_summary:
+        sections.append("### Resumen Espectral")
+        sections.append(spectrum_summary[:2000])
+        sections.append("")
+
+    if ims_table:
+        sections.append("### Tabla de IMs")
+        sections.append(ims_table[:2000])
+        sections.append("")
+
+    context_block = "\n".join(sections)
+    prompt = (
+        "Eres un experto en procesamiento de acelerogramas siguiendo el estándar "
+        "COSMOS/PEER NGA.\n\n"
+        "INSTRUCCIONES:\n"
+        "- Analiza el contexto entregado (QC, espectro, IMs) y recomienda:\n"
+        "  1. fc_low (Hz): elige donde la señal emerge del ruido de fondo en el FAS. "
+        "Típicamente 0.05–1.0 Hz. Justifica con datos.\n"
+        "  2. fc_high (Hz): Nyquist o ruido instrumental. Típicamente 25–50 Hz.\n"
+        "  3. Baseline correction: lineal (eventos cortos), polinomial grado 2 "
+        "(near-fault), promedio (ruido estacionario).\n"
+        "- Justifica cada parámetro citando valores numéricos.\n"
+        "- Responde en español.\n\n"
+        f"{context_block}\n\n"
+        "RECOMENDACIÓN DE PROCESAMIENTO:"
+    )
+    _monitor_event("agent_run", task="processing_agent")
+    start_time = time.time()
+    try:
+        result = agent.run(prompt)
+    except Exception as exc:
+        LOGGER.error("Falló processing_agent: %s", exc)
+        _monitor_event("agent_run_failed", task="processing_agent", extra={"message": str(exc)})
+        return None
+    duration = time.time() - start_time
+    record_agent_time(duration)
+    _monitor_event("agent_run_complete", task="processing_agent")
     return getattr(result, "content", None)
 
 
@@ -848,7 +1088,7 @@ def run_spectrum_analysis(
     """
     agent = agents.get("spectrum_analysis")
     if agent is None:
-        LOGGER.warning("Agente de análisis espectral no configurado. Configure 'spectrum_analysis' en agents_config.yaml.")
+        LOGGER.warning("Agente de análisis espectral no configurado. Configure 'spectrum_analyzer' en agents_config.yaml.")
         return None
 
     # Construir contexto sobre la traza y el análisis
@@ -1358,4 +1598,9 @@ def _resolve_model(*, provider: str, model_id: str):
         module = importlib.import_module("agno.models.anthropic")
         model_cls = _first_available_attr(module, ("Claude", "AnthropicChat"))
         return model_cls(id=model_id)
+    if provider == "lmstudio":
+        import os
+        module = importlib.import_module("agno.models.lmstudio")
+        base_url = os.getenv("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234/v1")
+        return module.LMStudio(id=model_id, base_url=base_url)
     raise ValueError(f"Proveedor no soportado: {provider}")

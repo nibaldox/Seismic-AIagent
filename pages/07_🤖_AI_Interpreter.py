@@ -18,6 +18,7 @@ load_dotenv(dotenv_path=PROJECT_ROOT / ".env", override=False)
 from src.ai_agent.earthquake_search import EarthquakeQuery, EarthquakeSearcher
 from src.ai_agent.report_generator import build_report_agent, generate_markdown_report, build_report_md
 from src.ai_agent.seismic_interpreter import load_agent_suite, run_primary_analysis, run_team_analysis
+from src.ai_agent.dynamic_config import get_dynamic_config_path
 from src.streamlit_utils.session_state import (
     get_current_stream_name,
     get_session,
@@ -36,9 +37,23 @@ LOGGER = setup_logger(__name__)
 
 
 def _get_agent_suite():
-    if "ai_agents" not in st.session_state:
-        st.session_state["ai_agents"] = load_agent_suite()
-    return st.session_state["ai_agents"]
+    # Obtener modelo seleccionado desde session_state
+    selected_model = st.session_state.get("selected_ai_model", "deepseek/deepseek-chat-v3.1:free")
+    
+    # Usar clave de caché basada en el modelo para evitar recreación innecesaria
+    cache_key = f"ai_agents_{selected_model.replace('/', '_').replace(':', '_')}"
+    
+    if cache_key not in st.session_state:
+        # Crear configuración dinámica para el modelo seleccionado
+        dynamic_config_path = get_dynamic_config_path(selected_model)
+        st.session_state[cache_key] = load_agent_suite(dynamic_config_path)
+        
+        # Limpiar cachés de otros modelos para liberar memoria
+        keys_to_remove = [k for k in st.session_state.keys() if isinstance(k, str) and k.startswith("ai_agents_") and k != cache_key]
+        for k in keys_to_remove:
+            del st.session_state[k]
+    
+    return st.session_state[cache_key]
 
 
 def _pick_default_labels(session, labels: List[str]) -> List[str]:
@@ -206,6 +221,18 @@ def main() -> None:
 
     config = load_yaml("agno_config.yaml").get("seismic_interpreter", {})
     st.subheader("AI Analysis")
+    
+    # Mostrar modelo activo
+    current_model = st.session_state.get("selected_ai_model", "deepseek/deepseek-chat-v3.1:free")
+    model_display_names = {
+        "deepseek/deepseek-chat-v3.1:free": "DeepSeek Chat v3.1",
+        "moonshotai/kimi-k2:free": "Moonshot Kimi K2",
+        "x-ai/grok-4-fast:free": "xAI Grok 4 Fast",
+        "meituan/longcat-flash-chat": "Meituan LongCat Flash",
+        "z-ai/glm-4.5-air:free": "Z-AI GLM 4.5 Air",
+        "qwen/qwen3-235b-a22b:free": "Qwen3 235B (non-thinking)"
+    }
+    st.info(f"🤖 Modelo activo: **{model_display_names.get(current_model, current_model)}**")
 
     # Opciones avanzadas (equipo IA) para incluir telemetría/histogramas previos
     with st.expander("Opciones avanzadas (Equipo IA)"):
