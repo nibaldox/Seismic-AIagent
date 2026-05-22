@@ -1,0 +1,37 @@
+services:
+  seismoanalyzer:
+    build: .
+    container_name: seismoanalyzer
+    ports:
+      - "8501:8501"
+    read_only: true
+    tmpfs:
+      - /tmp: rw,noexec,nosuid,size=100m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - seismo_data:/app/data
+      - seismo_uploads:/app/uploaded_files
+      - seismo_logs:/app/logs
+      - ./config:/app/config:ro
+    env_file:
+      - .env
+    environment:
+      - STREAMLIT_SERVER_MAX_UPLOAD_SIZE=1000
+      - STREAMLIT_ENV=production
+      - PIP_NO_CACHE_DIR=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    user: "1000:1000"
+
+volumes:
+  seismo_data:
+  seismo_uploads:
+  seismo_logs:

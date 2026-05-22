@@ -1,22 +1,18 @@
 """Simple 1D (horizontal) earthquake location by P-S differential times.
+Now also supports 3D grid search including depth (z-axis).
 
-Simplificaciones:
-- Se asume terreno plano (z=0 fuente y estaciones) -> solo epicentro 2D.
-- Hipocentro superficial (depth = 0 km) (puede ampliarse luego a grid 3D).
-- Se usa modelo de velocidades constantes Vp, Vs en todo el dominio.
-- Observaciones: para cada estación se requiere (tP, tS) relativos al mismo origen de la traza.
-- El tiempo origen (t0) se estima minimizando residuales entre tiempos observados y predichos.
+Simplificaciones (3D MVP):
+- Se asume terreno plano para estaciones (z=0 para estaciones superficiales).
+- Se permite profundidad variable para el hipocentro.
+- Modelo de velocidades homogéneas (Vp, Vs constantes en todo el dominio).
+- No se modelan interfases de velocidad ni gradient.
+- Para深度 > 0, la distancia euclidiana es sqrt(dx²+dy²+z²).
 
-Metodología:
-1. Para cada punto de un grid (x,y) se calcula distancia a cada estación.
-2. Con Vp, Vs se derivan tiempos de viaje teóricos P y S: tP = R/Vp, tS = R/Vs.
-3. Para cada estación se puede construir un tiempo origen candidato: t0_i = tP_obs - R/Vp (o usando S), se promedia robustamente.
-4. Se computan residuales y un RMS global. Se selecciona el punto con menor RMS.
-
-Limitaciones: Muy simplificado; no apto para publicación científica sin extender a profundidad, 1D layer cake, correcciones de estación y ajuste conjunto no lineal.
+Limitaciones: Muy simplificado; no apto para publicación científica sin extender
+a modelo 1D layer-cake, correcciones de estación y ajuste conjunto no lineal.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Tuple, Optional, Iterable
 import numpy as np
 
@@ -30,10 +26,11 @@ class Station:
     code: str
     x: float  # km en proyección local
     y: float  # km
+    z: float = 0.0  # km (elevación, típica 0 para estaciones superficiales)
 
 @dataclass
 class PSObservation:
-    station: str
+    station: Station
     t_p: float  # s relativo a inicio registro
     t_s: float  # s relativo a inicio registro
 
@@ -41,6 +38,7 @@ class PSObservation:
 class LocationResult:
     x: float
     y: float
+    z: float  # km de profundidad (>0 = más profundo)
     t0: float
     rms: float
     residuals: List[Tuple[str, float]]
@@ -49,10 +47,15 @@ class LocationResult:
 
 
 def _estimate_t0(dist_km: float, obs: PSObservation, model: OneDVelocityModel) -> Tuple[float, float]:
-    """Return (t0_from_P, t0_from_S)."""
+    """Return (t0_from_P, t0_from_S) given a 3D epicentral distance."""
     t0_p = obs.t_p - dist_km / model.vp
     t0_s = obs.t_s - dist_km / model.vs
     return t0_p, t0_s
+
+
+def _dist_3d(station: Station, x: float, y: float, z: float) -> float:
+    """Euclidean distance from (x,y,z) to station in 3D."""
+    return np.sqrt((station.x - x) ** 2 + (station.y - y) ** 2 + (station.z - z) ** 2)
 
 
 def locate_event_1d(
@@ -62,63 +65,69 @@ def locate_event_1d(
     *,
     grid_x: Tuple[float, float, float] = (-50, 50, 2.0),
     grid_y: Tuple[float, float, float] = (-50, 50, 2.0),
+    grid_z: Tuple[float, float, float] = (-20, 0, 2.0),
     min_stations: int = 2,
 ) -> Optional[LocationResult]:
-    """Grid search superficial.
+    """Grid search 3D (x, y, z).
 
     Parámetros:
       stations: lista de estaciones con coordenadas (km) en sistema local.
       observations: P-S picks (tP, tS) por estación.
       model: velocidades homogéneas.
-      grid_x, grid_y: (min, max, step) km.
+      grid_x, grid_y, grid_z: (min, max, step) km.
+        - Para búsqueda 2D, usar grid_z=(0, 0, 1) para forzar z=0.
+        - Para 3D, grid_z típico: (-20, 0, 2) o (-30, 0, 1).
 
-    Devuelve LocationResult o None si insuficiente.
+    Devuelve LocationResult con z (profundidad) o None si insuficiente.
     """
     obs_list = list(observations)
     if len(obs_list) < min_stations:
         return None
 
-    # Map station -> (x,y)
     st_map = {s.code: s for s in stations}
-    # Filtrar observaciones válidas
-    valid_obs = [o for o in obs_list if o.station in st_map and o.t_s > o.t_p]
+    valid_obs = [
+        o for o in obs_list
+        if isinstance(o.station, Station) and o.station.code in st_map and o.t_s > o.t_p
+    ]
     if len(valid_obs) < min_stations:
         return None
 
     gx = np.arange(grid_x[0], grid_x[1] + 1e-9, grid_x[2])
     gy = np.arange(grid_y[0], grid_y[1] + 1e-9, grid_y[2])
+    gz = np.arange(grid_z[0], grid_z[1] + 1e-9, grid_z[2])
 
     best: Optional[LocationResult] = None
 
     for x in gx:
         for y in gy:
-            t0_candidates = []
-            residuals = []
-            used = 0
-            for o in valid_obs:
-                st = st_map[o.station]
-                dist = np.hypot(st.x - x, st.y - y)
-                t0_p, t0_s = _estimate_t0(dist, o, model)
-                # Usamos ambos si tienen sentido
-                if np.isfinite(t0_p):
-                    t0_candidates.append(t0_p)
-                if np.isfinite(t0_s):
-                    t0_candidates.append(t0_s)
-            if len(t0_candidates) == 0:
-                continue
-            # Estimar t0 robusto (mediana)
-            t0 = float(np.median(t0_candidates))
-            # Calcular residuales versus tP
-            for o in valid_obs:
-                st = st_map[o.station]
-                dist = np.hypot(st.x - x, st.y - y)
-                tP_pred = t0 + dist / model.vp
-                res = o.t_p - tP_pred
-                residuals.append((o.station, res))
-                used += 1
-            if used == 0:
-                continue
-            rms = float(np.sqrt(np.maximum(np.mean([r[1] ** 2 for r in residuals]), 0.0)))
-            if best is None or rms < best.rms:
-                best = LocationResult(x, y, t0, rms, residuals, used, "OK (superficial homogéneo)")
+            for z in gz:
+                t0_candidates = []
+                residuals = []
+                used = 0
+                for o in valid_obs:
+                    dist = _dist_3d(o.station, x, y, z)
+                    t0_p, t0_s = _estimate_t0(dist, o, model)
+                    if np.isfinite(t0_p):
+                        t0_candidates.append(t0_p)
+                    if np.isfinite(t0_s):
+                        t0_candidates.append(t0_s)
+                if not t0_candidates:
+                    continue
+                t0 = float(np.median(t0_candidates))
+                for o in valid_obs:
+                    dist = _dist_3d(o.station, x, y, z)
+                    tP_pred = t0 + dist / model.vp
+                    residuals.append((o.station.code, o.t_p - tP_pred))
+                    used += 1
+                if used == 0:
+                    continue
+                rms = float(np.sqrt(np.mean([r[1] ** 2 for r in residuals])))
+                if best is None or rms < best.rms:
+                    notes = (
+                        f"3D homogéneo (z={z:.1f} km)"
+                        if z != 0
+                        else "2D homogéneo (z=0 forzado)"
+                    )
+                    best = LocationResult(x, y, z, t0, rms, residuals, used, notes)
+
     return best

@@ -218,3 +218,18 @@ node_modules/
 
 # Docker
 .dockerignore
+
+# Local IDE settings
+.claude/
+
+# Uploaded data
+uploaded_files/
+
+# Orphan node artifact
+package-lock.json
+
+# Old files
+README_old.md
+
+# Temporary outputs
+tmp_waveform.html

@@ -109,22 +109,6 @@ def compute_rotd(
         sys = _scipy_signal.lti([0, 0, k_spring], [1, c_damp, k_spring])
         t_out = t_vec
 
-        # Sa de la componente 1
-        try:
-            _, r1 = _scipy_signal.lsim(sys, acc1, t_out)
-            sa1 = float(np.max(np.abs(r1)))
-        except Exception as exc:
-            LOGGER.warning("lsim falló para comp1 T=%.3fs: %s — usando max abs como fallback", T, exc)
-            sa1 = float(np.max(np.abs(acc1)))
-
-        # Sa de la componente 2
-        try:
-            _, r2 = _scipy_signal.lsim(sys, acc2, t_out)
-            sa2 = float(np.max(np.abs(r2)))
-        except Exception as exc:
-            LOGGER.warning("lsim falló para comp2 T=%.3fs: %s — usando max abs como fallback", T, exc)
-            sa2 = float(np.max(np.abs(acc2)))
-
         # Proyección a cada ángulo: a_theta = a1*cos(θ) + a2*sin(θ)
         # Sa(θ) = max|disp_theta| * omega²
         try:

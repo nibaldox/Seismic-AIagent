@@ -1,143 +1,101 @@
-# CLAUDE.md
+# AGENTS.md — SeismoAnalyzer Pro v2.0
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guía para asistentes de IA (opencode, Claude Code) al trabajar con este repositorio.
 
-## Project Overview
+## Descripción General
 
-**SeismoAnalyzer Pro** is a seismic data analysis platform combining classical seismology (ObsPy) with multi-agent AI interpretation (Agno v2). It is a Streamlit multi-page application deployed locally or via Docker.
+Plataforma de análisis sísmico con 3 interfaces: **Streamlit** (web interactiva), **FastAPI REST** (API headless), **CLI** (batch processing). Incluye frontend SPA estático deployable a GitHub Pages + CI/CD via GitHub Actions.
 
-Primary language: Python 3.9+. UI: Streamlit. AI orchestration: Agno v2 via OpenRouter API.
+Lenguaje: Python 3.13+. Frameworks: Streamlit 1.56, FastAPI, ObsPy, Plotly, Agno v2.
 
-## Common Commands
+## Comandos Comunes
 
 ```bash
-# Run the app
-streamlit run streamlit_app.py
+# Streamlit web
+streamlit run streamlit_app.py          # → :8501
 
-# Run all tests
-pytest -q
+# API REST
+python -m src.server                     # → :8000/api + :8000/app
 
-# Run a single test file
-pytest tests/test_core.py -v
+# CLI batch
+python -m src.cli "data/" -r -p "*.ms" -o out.json
 
-# Run a single test
-pytest tests/test_core.py::test_function_name -v
+# Tests
+pytest -q                                 # 202 tests
+pytest tests/test_server.py -v            # API tests
+pytest tests/test_core.py::test_name -v   # Single test
 
 # Lint
-flake8 src/ pages/
-black src/ pages/
-
-# Type check
-mypy src/
+flake8 src/ pages/ tests/
 ```
 
-## Environment Setup
-
-Copy `config/example.env` to `.env` and fill in:
-- `OPENROUTER_API_KEY` — required for AI features
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — optional fallbacks
-- `USGS_API_URL` / `EMSC_API_URL` — seismic catalog endpoints
-- `LMSTUDIO_BASE_URL` — optional, for local LM Studio models (default: `http://127.0.0.1:1234/v1`)
-
-## Architecture
-
-### Layered Structure
+## Arquitectura
 
 ```
-pages/               → Streamlit UI pages (multi-page app, numbered 00–10)
-src/core/            → Classical seismology algorithms (ObsPy-based)
-src/ai_agent/        → Multi-agent AI orchestration (Agno v2)
-src/visualization/    → Plotly waveform and spectral plots
-src/streamlit_utils/  → Session state, UI helpers, agent loader
-src/utils/           → Config loader, logger, geo utilities
-tests/               → pytest suite (16+ test files)
-docs/                → Architecture, agent guide, user guide, roadmap
-config/              → YAML agent definitions, Streamlit config
+streamlit_app.py          → Entry point Streamlit (11 páginas)
+src/server.py             → FastAPI API + sirve frontend estático
+src/cli.py                → CLI batch processing
+src/
+  core/                   → Algoritmos sismológicos (ObsPy)
+  ai_agent/               → 7 agentes IA con Agno v2
+  visualization/          → Gráficos Plotly
+  streamlit_utils/        → Session state, helpers UI
+  tools/simulator.py      → Generador de datos sintéticos
+  utils/                  → Config, logger, geo
+frontend/                 → SPA estática (7 páginas, Plotly.js)
+pages/                    → 11 páginas Streamlit (00-10)
+tests/                    → 17 archivos, 202 tests
+.github/workflows/ci.yml  → CI/CD: test → lint → docker → Pages
 ```
 
-### Pages (in order)
+### Endpoints API
 
-| Page | Purpose |
-|------|---------|
-| `00_📁_Uploader.py` | Single-file upload (MSEED/SAC/SEG-2/Kelunji .ss/Gecko .bin) |
-| `01_🗂️_Batch_Loader.py` | Multi-file batch upload |
-| `02_📊_Waveform_Viewer.py` | Waveform visualization with filtering and STA/LTA picks |
-| `03_🔍_Spectrum_Analysis.py` | Frequency-domain analysis, Fourier/response spectra |
-| `04_📈_Histogramas_Gecko.py` | Telemetry histograms from Gecko .bin format |
-| `05_🌍_Location_1D.py` | 1D grid-search hypocenter localization |
-| `06_🤖_AI_Interpreter.py` | Multi-agent AI analysis and report generation |
-| `07_📚_Centro_Ayuda.py` | Help center |
-| `08_📡_Monitor.py` | Real-time monitoring dashboard with PGA/PGV alerts |
-| `09_📄_Reporte_Final.py` | Final integrated report export |
-| `10_🔬_Magnitud.py` | Local magnitude (ML-WA) with regional calibration |
+| Endpoint | Método | Descripción |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/analyze` | POST | Subir archivo sísmico |
+| `/api/datasets` | GET | Listar datasets en caché |
+| `/api/datasets/{name}` | GET | Info de dataset |
+| `/api/datasets/{name}/waveform` | GET | Waveform data (downsampled) |
+| `/api/datasets/{name}/spectrum` | GET | Espectro (FFT/PSD/HVSR/RotD50) |
+| `/api/location/demo` | GET | Demo de localización |
+
+### Módulos Core
+
+- `data_reader.py` — FORMAT_REGISTRY: MSEED, SAC, SEG-2, Gecko .bin, Kelunji .ss
+- `picking.py` — STA/LTA con detección P/S + SNR
+- `magnitude.py` — ML Wood-Anderson, calibración regional (CSN Chile)
+- `magnitude_backup.py` — Versión legacy + WA con respuesta instrumental
+- `intensity_measures.py` — PGA, PGV, PGD, Arias, CAV, duración significativa
+- `hvsr.py` — HVSR método Nakamura + criterios SESAME
+- `rotd50.py` — RotD50/RotD100 (PEER)
+- `design_spectra.py` — NCh433 (Chile) + ASCE 7-22
+- `earthquake_search.py` — Catálogos USGS/EMSC
 
 ### Data Flow
 
-1. **Upload** (`pages/00` or `01`) → `DataReader` parses file → stores in `_STREAM_CACHE` (global, non-serializable, LRU max 10 entries) and registers metadata in `st.session_state` via `src/streamlit_utils/session_state.py`
-2. **Analysis pages** retrieve the stream via `get_current_stream()`, apply signal processing, and render Plotly charts
-3. **AI Interpreter** (`pages/06`) loads the agent suite from `config/agents_config_dynamic.yaml` (auto-generated by `src/ai_agent/dynamic_config.py`), runs agents via `src/ai_agent/seismic_interpreter.py`, and renders structured markdown reports
+1. **Upload** (Streamlit/API/CLI) → DataReader parsea archivo
+2. **Procesamiento** → Filtros → Picks STA/LTA → IMs → Espectros
+3. **AI** → 7 agentes Agno v2 vía OpenRouter o LM Studio
+4. **Output** → Dashboard Streamlit / API JSON / CLI JSON / SPA web
 
-### Pipeline Stages (V0→V3)
+### Bugs Conocidos / Fixes Aplicados
 
-Displayed in sidebar with emoji indicators:
-- **V0**: Data loaded
-- **V1**: Filtered / baseline-corrected
-- **V2**: Intensity measures calculated
-- **V3**: Spectra / code output
+- `magnitude_backup.py:419` — docstring sin cerrar (FIXED)
+- `earthquake_search.py` — `datetime.utcnow()` deprecado en 3.14 (FIXED)
+- `test_core.py::test_data_reader_requires_obspy` — esperaba `ImportError` (FIXED → `DataReadError`)
 
-When switching datasets via `set_current_stream()`, the previous dataset's picks, pipeline steps, and AI results are saved to a `per_dataset` dict before switching, providing per-dataset state isolation.
+## Tests (202 ✔️, 4 ⏭️)
 
-### Session State Architecture
+```bash
+pytest -q
+# 202 passed, 4 skipped
+```
 
-`src/streamlit_utils/session_state.py` is the central state manager. Key distinction:
-- **`_STREAM_CACHE`** — global `OrderedDict` for ObsPy `Stream` objects (non-serializable, lives outside `st.session_state`, LRU max 10)
-- **`st.session_state`** — stores `SeismicSession` dataclass with metadata, picks, agent cache keys, team context, histogram data
+Los 4 skipped son esperados: 2 por monkeypatch/legacy, 2 por requerir API key externa.
 
-Always use the public API (`get_session()`, `register_stream()`, `get_current_stream()`, etc.) rather than accessing session state directly. The full public API is exported in `__all__` at the top of that module.
+## Docs Relacionados
 
-### AI Agent System
-
-Six specialized agents defined in `config/agents_config.yaml`:
-- **Waveform Analyzer** — phase detection, signal quality, event type
-- **Spectrum Analyzer** — frequency-domain interpretation
-- **Histogram Analyzer** — telemetry trends, anomalies
-- **Earthquake Correlator** — USGS/EMSC catalog search
-- **Report Synthesizer** — integrates multi-agent findings
-- **Quality Assurance** — consistency and confidence validation
-
-At runtime, the user selects a model (DeepSeek, Moonshot, Grok, LM Studio, etc.) in `streamlit_app.py`. `dynamic_config.py` generates `config/agents_config_dynamic.yaml` with the chosen model injected into every agent. All cloud agents use OpenRouter; local agents use LM Studio.
-
-**Single access point for agents:** `src/streamlit_utils/agent_loader.py::get_agent_suite()` — replaces the previous per-page copies. It reads `st.session_state["selected_ai_model"]`, generates the dynamic config, instantiates agents, and caches them in `st.session_state` under key `ai_agents_<model_hash>`.
-
-Two execution modes in `pages/06`:
-- **Individual** — single-agent waveform analysis via `run_primary_analysis()`
-- **Team (Equipo IA)** — full multi-agent orchestration via `run_team_analysis()`
-
-### Core Seismology Modules (`src/core/`)
-
-- `data_reader.py` — `FORMAT_REGISTRY` maps file extensions to loader functions
-- `signal_processing.py` — bandpass/highpass/lowpass filtering with ObsPy
-- `picking.py` — STA/LTA automatic P/S phase picker
-- `magnitude.py` — Wood-Anderson local magnitude (ML-WA)
-- `location/one_d_location.py` — 1D grid-search hypocenter localization
-- `intensity_measures.py` — PGA, PGV, PGD, Arias intensity, CAV, significant duration (COSMOS/PEER/CESMD standards)
-- `design_spectra.py` — Design spectra per NCh433 (Chile) and ASCE 7-22 (USA)
-- `hvsr.py` — Horizontal-to-Vertical Spectral Ratio
-- `rotd50.py` — RotD50 ground motion metric
-
-### Configuration Loading
-
-`src/utils/config.py` provides `load_yaml(path)`. Agent configs are YAML with fields: `agent_id`, `name`, `model.id`, `model.provider`, `instructions`, `expected_output`, `cache`, `monitoring`.
-
-### Notable Patterns
-
-- **`FORMAT_REGISTRY`** (`src/core/data_reader.py`): `OrderedDict` mapping file extensions to `FormatDescriptor` objects. Handles MSEED, SAC, SEG-2, Gecko .bin, Kelunji .ss, and others via custom loaders.
-- **Regional magnitude calibration** (`src/core/magnitude.py`): ML-WA uses regional PAZ loaded from `config/agents_config.yaml` at runtime. Active region is configurable (default: `csn_chile`).
-- **LRU stream cache with eviction warnings**: `_STREAM_CACHE` holds max 10 entries; oldest is evicted with a logged warning when limit is exceeded.
-- **Agent cache by model hash**: Changing the selected model invalidates the agent cache by deleting keys matching `ai_agents_*`.
-
-## Key Docs
-
-- `docs/TECHNICAL_DOCS.md` — detailed architecture and API specs
-- `docs/AGENT_MODIFICATION_GUIDE.md` — how to add/modify agents
-- `docs/USER_GUIDE.md` — end-user walkthrough
+- `docs/TECHNICAL_DOCS.md` — arquitectura detallada
+- `docs/AGENT_MODIFICATION_GUIDE.md` — cómo modificar agentes IA
+- `docs/USER_GUIDE.md` — guía de usuario

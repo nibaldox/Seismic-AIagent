@@ -104,10 +104,13 @@ def ncch433_spectrum(
 
     for i, T in enumerate(periods):
         if T <= T0:
-            # Zona de aceleración constante (meseta)
-            sa_base = A0 * S * Ia
+            if T <= 0:
+                sa_base = A0 * S  # PGA en T=0 (sin amplificación Ia)
+            else:
+                # Rama ascendente lineal: A0*S → A0*S*Ia entre T=0 y T=T0
+                sa_base = A0 * S + (A0 * S * Ia - A0 * S) * (T / T0)
         elif T <= Tn:
-            # Transición plana → meseta
+            # Zona de aceleración constante (meseta)
             sa_base = A0 * S * Ia
         else:
             # Zona descendente

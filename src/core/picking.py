@@ -216,18 +216,36 @@ def suggest_picks_sta_lta(
         p_time = last_p["time_rel"]
 
         if is_vertical:
-            # Vp/Vs ≈ 1.73 → S arrives at p_time + p_time * (Vp/Vs - 1) ≈ p_time * 0.73
-            # More practically: use Wadati relation Δts ≈ Δtp * (Vp/Vs - 1)
-            # With Vp≈6, Vs≈3.5 → Vp/Vs≈1.71; ΔtS ≈ p_time * 0.71 (rough)
-            s_time_estimate = p_time + p_time * 0.71
-            if s_time_estimate < data.size / sr:
+            # Estimate S arrival using STA/LTA on vertical after P arrival
+            p_start_idx = int(p_time * sr)
+            v_data = filtered[p_start_idx:]
+            if v_data.size >= nlta and (classic_sta_lta is not None):
+                try:
+                    cft_v = classic_sta_lta(v_data, nsta, nlta)
+                    on_off_v = trigger_onset(cft_v, on * 0.8, off)
+                    if on_off_v:
+                        s_onset, _ = on_off_v[0]
+                        s_time_est = p_time + float(s_onset) / sr
+                        s_score_est = float(cft_v[s_onset]) if s_onset < len(cft_v) else 0.0
+                        s_snr = _local_snr(v_data, s_onset, sr)
+                        suggestions.append({
+                            "time_rel": s_time_est, "phase": "S?",
+                            "score": s_score_est,
+                            "uncertainty_s": uncertainty_s,
+                            "snr_db": s_snr,
+                        })
+                except Exception:
+                    pass
+            # Fallback: use fixed default S-P window (10s) if STA/LTA fails
+            if not suggestions or suggestions[-1].get("phase") != "S?":
+                s_time_fallback = min(p_time + 10.0, data.size / sr)
                 suggestions.append({
-                    "time_rel": s_time_estimate,
+                    "time_rel": s_time_fallback,
                     "phase": "S?",
-                    "score": 0.0,  # estimated, not measured
-                    "uncertainty_s": p_time * 0.15,  # ±15% of P-S interval
+                    "score": 0.0,
+                    "uncertainty_s": 3.0,
                     "snr_db": None,
-                    "note": "Estimado por relación Vp/Vs=1.71 desde P. Verificar manualmente.",
+                    "note": "S estimado a 10s de P (fallback). Verificar manualmente.",
                 })
         else:
             # Horizontal channel: run independent STA/LTA starting after P

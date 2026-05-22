@@ -1,0 +1,57 @@
+"""Golden test snapshots for 3D location."""
+
+{
+  "events": [
+    {
+      "id": "E1",
+      "true_x_km": 10.0,
+      "true_y_km": 10.0,
+      "true_z_km": 5.0,
+      "stations": 5,
+      "noise_std_s": 0.05,
+      "seed": 42,
+      "expected": {
+        "x_km": 10.0,
+        "y_km": 10.0,
+        "z_km": 5.0,
+        "rms_s": 0.15,
+        "depth_error_km": 0.5,
+        "used_stations": 5
+      }
+    },
+    {
+      "id": "E2",
+      "true_x_km": 5.0,
+      "true_y_km": 15.0,
+      "true_z_km": 10.0,
+      "stations": 5,
+      "noise_std_s": 0.05,
+      "seed": 42,
+      "expected": {
+        "x_km": 5.0,
+        "y_km": 15.0,
+        "z_km": 10.0,
+        "rms_s": 0.18,
+        "depth_error_km": 0.8,
+        "used_stations": 5
+      }
+    },
+    {
+      "id": "E3",
+      "true_x_km": 15.0,
+      "true_y_km": 5.0,
+      "true_z_km": 15.0,
+      "stations": 5,
+      "noise_std_s": 0.05,
+      "seed": 42,
+      "expected": {
+        "x_km": 15.0,
+        "y_km": 5.0,
+        "z_km": 15.0,
+        "rms_s": 0.20,
+        "depth_error_km": 1.2,
+        "used_stations": 5
+      }
+    }
+  ]
+}

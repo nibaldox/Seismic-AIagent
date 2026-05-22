@@ -35,7 +35,7 @@ def _render_histogram_ai_panel(*, container, key_prefix: str, filename: str | No
         if agent_error:
             container.error(f"No se pudo inicializar el interprete: {agent_error}")
         else:
-            container.info("Configura los agentes IA en config/agno_config.yaml.")
+            container.info("Configura los agentes IA en config/agents_config.yaml.")
         return
     if not df_head_md.strip():
         container.info("Selecciona datos validos para enviar al interprete.")

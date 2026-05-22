@@ -111,10 +111,18 @@ def compute_pgv_pgd(
         (pgv_cms, pgd_cm)
     """
     acc = np.asarray(acc, dtype=float)
-    vel = np.cumsum(acc) * dt          # integración rectangular (suficiente para cm/s²)
-    disp = np.cumsum(vel) * dt
-    pgv = float(np.max(np.abs(vel)))
-    pgd = float(np.max(np.abs(disp)))
+    # Trapezoidal integration with linear baseline removal after each step
+    # to prevent quadratic drift from double integration
+    vel = np.cumsum((acc[:-1] + acc[1:]) * 0.5) * dt
+    if vel.size > 2:
+        x_v = np.arange(vel.size, dtype=float)
+        vel -= np.polyval(np.polyfit(x_v, vel, 1), x_v)
+    disp = np.cumsum((vel[:-1] + vel[1:]) * 0.5) * dt
+    if disp.size > 2:
+        x_d = np.arange(disp.size, dtype=float)
+        disp -= np.polyval(np.polyfit(x_d, disp, 1), x_d)
+    pgv = float(np.max(np.abs(vel))) if vel.size > 0 else 0.0
+    pgd = float(np.max(np.abs(disp))) if disp.size > 0 else 0.0
     return pgv, pgd
 
 

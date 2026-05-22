@@ -53,7 +53,7 @@ def load_agent_config(primary: str | None = None) -> Dict[str, Any]:
 def load_yaml(relative_path: str) -> Dict[str, Any]:
     """Load a YAML config file from the config directory.
 
-    Accepts either just the filename (e.g., "agno_config.yaml") or a path
+    Accepts either just the filename (e.g., "agents_config.yaml") or a path
     mistakenly prefixed with "config/". In the latter case, the redundant
     prefix is removed to avoid resolving to "config/config/...".
     """
@@ -71,7 +71,7 @@ def load_yaml(relative_path: str) -> Dict[str, Any]:
 
     if not config_path.exists():
         raise ConfigError(
-            f"Configuration file not found: {config_path} (hint: pase 'agno_config.yaml', no 'config/agno_config.yaml')"
+            f"Configuration file not found: {config_path} (hint: pase 'agents_config.yaml', no 'config/agents_config.yaml')"
         )
 
     with config_path.open("r", encoding="utf-8") as handle:

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SeismoAnalyzer Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌋</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 40 40" width="32" height="32">
+            <defs><linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#55efc4"/><stop offset="100%" stop-color="#74b9ff"/></linearGradient></defs>
+            <rect x="4" y="24" width="6" height="12" rx="2" fill="url(#g1)" opacity="0.7"/>
+            <rect x="12" y="16" width="6" height="20" rx="2" fill="url(#g1)" opacity="0.85"/>
+            <rect x="20" y="8" width="6" height="28" rx="2" fill="url(#g1)"/>
+            <rect x="28" y="20" width="6" height="16" rx="2" fill="url(#g1)" opacity="0.75"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">SeismoAnalyzer</span>
+          <span class="brand-version">v2.0</span>
+        </div>
+        <button class="sidebar-collapse" onclick="toggleSidebar()" aria-label="Collapse sidebar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-label">Navegación</div>
+        <a href="#dashboard" class="nav-item active" data-page="dashboard">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><rect x="3" y="13" width="7" height="8" rx="1"/></svg>
+          </span>
+          <span class="nav-label">Dashboard</span>
+        </a>
+        <a href="#upload" class="nav-item" data-page="upload">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </span>
+          <span class="nav-label">Upload</span>
+        </a>
+        <a href="#waveform" class="nav-item" data-page="waveform">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 12 19 12 17 8 13 16 11 8 7 16 5 12 1 12"/></svg>
+          </span>
+          <span class="nav-label">Waveform</span>
+        </a>
+        <a href="#spectrum" class="nav-item" data-page="spectrum">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-8"/></svg>
+          </span>
+          <span class="nav-label">Spectrum</span>
+        </a>
+        <a href="#monitor" class="nav-item" data-page="monitor">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </span>
+          <span class="nav-label">Monitor</span>
+        </a>
+        <a href="#location" class="nav-item" data-page="location">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 10-16 0c0 3 2.7 7 8 11.7z"/></svg>
+          </span>
+          <span class="nav-label">Location</span>
+        </a>
+        <a href="#report" class="nav-item" data-page="report">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </span>
+          <span class="nav-label">Reporte</span>
+        </a>
+        <a href="#magnitude" class="nav-item" data-page="magnitude">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          <span class="nav-label">Magnitud</span>
+        </a>
+        <a href="#batch" class="nav-item" data-page="batch">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg>
+          </span>
+          <span class="nav-label">Batch</span>
+        </a>
+        <a href="#telemetry" class="nav-item" data-page="telemetry">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </span>
+          <span class="nav-label">Telemetry</span>
+        </a>
+        <a href="#help" class="nav-item" data-page="help">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span>
+          <span class="nav-label">Ayuda</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-badge" id="api-status" data-status="offline">
+          <span class="status-dot"></span>
+          <span class="status-text">API desconectada</span>
+        </div>
+        <button class="theme-toggle" id="theme-toggle" title="Cambiar tema">
+          <span class="theme-icon" id="theme-icon">🌙</span>
+          <span class="theme-label" id="theme-label">Tema oscuro</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="topbar-menu" onclick="toggleSidebar()" aria-label="Menu">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
+          <div class="breadcrumb">
+            <span class="breadcrumb-current" id="breadcrumb">Dashboard</span>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div class="topbar-datetime" id="topbar-datetime"></div>
+          <button class="topbar-btn" onclick="refreshData()" title="Refresh">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Page: Dashboard -->
+      <section id="page-dashboard" class="page active">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <p class="page-desc">Resumen de actividad sísmica y estado del sistema</p>
+        </div>
+        <div class="stats-grid">
+          <div class="metric-card">
+            <div class="metric-icon" style="--mc:#55efc4">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </div>
+            <div class="metric-body">
+              <span class="metric-value" id="stat-files">0</span>
+              <span class="metric-label">Archivos</span>
+            </div>
+            <canvas class="metric-sparkline" id="spark-files" width="120" height="30"></canvas>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="--mc:#74b9ff">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            </div>
+            <div class="metric-body">
+              <span class="metric-value" id="stat-traces">0</span>
+              <span class="metric-label">Traces</span>
+            </div>
+            <canvas class="metric-sparkline" id="spark-traces" width="120" height="30"></canvas>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="--mc:#ff6b6b">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            </div>
+            <div class="metric-body">
+              <span class="metric-value" id="stat-pga">—</span>
+              <span class="metric-label">PGA máx (cm/s²)</span>
+            </div>
+            <canvas class="metric-sparkline" id="spark-pga" width="120" height="30"></canvas>
+          </div>
+          <div class="metric-card">
+            <div class="metric-icon" style="--mc:#fdcb6e">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            </div>
+            <div class="metric-body">
+              <span class="metric-value" id="stat-picks">0</span>
+              <span class="metric-label">Picks</span>
+            </div>
+            <canvas class="metric-sparkline" id="spark-picks" width="120" height="30"></canvas>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <div class="card card-primary">
+            <div class="card-header">
+              <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Dataset Activo</h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted" id="active-dataset">Sin datos cargados</p>
+              <div class="pipeline-steps" id="pipeline-status">
+                <div class="step done" data-step="0"><div class="step-circle">📥</div><span>Cargado</span></div>
+                <div class="step-line"></div>
+                <div class="step" data-step="1"><div class="step-circle">🔧</div><span>Filtrado</span></div>
+                <div class="step-line"></div>
+                <div class="step" data-step="2"><div class="step-circle">📐</div><span>IMs</span></div>
+                <div class="step-line"></div>
+                <div class="step" data-step="3"><div class="step-circle">📊</div><span>Espectros</span></div>
+                <div class="step-line"></div>
+                <div class="step" data-step="4"><div class="step-circle">🤖</div><span>IA</span></div>
+                <div class="step-line"></div>
+                <div class="step" data-step="5"><div class="step-circle">📋</div><span>Reporte</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Última Actividad</h3>
+            </div>
+            <div class="card-body" id="dashboard-activity">
+              <p class="text-muted" style="text-align:center;padding:2rem 0">No hay actividad registrada</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Upload -->
+      <section id="page-upload" class="page">
+        <div class="page-header">
+          <h1>Upload & Analyze</h1>
+          <p class="page-desc">Sube archivos sísmicos para análisis completo con IA</p>
+        </div>
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-content">
+            <div class="upload-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <p class="upload-title">Arrastra archivos aquí</p>
+            <p class="upload-sub">o haz clic para seleccionar</p>
+            <p class="upload-formats">MiniSEED · SAC · SEG-2 · SUDS · Gecko</p>
+          </div>
+          <input type="file" id="file-input" multiple accept=".ms,.mseed,.sac,.seg2,.sg2,.suds,.bin" hidden>
+        </div>
+
+        <div id="upload-progress" class="hidden">
+          <div class="progress-container">
+            <div class="progress-track">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-info">
+              <span id="progress-text">Procesando...</span>
+              <span id="progress-percent">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="upload-results" class="hidden">
+          <div class="card" id="result-summary"></div>
+          <div id="result-traces"></div>
+        </div>
+      </section>
+
+      <!-- Page: Waveform -->
+      <section id="page-waveform" class="page">
+        <div class="page-header">
+          <h1>Waveform Viewer</h1>
+          <p class="page-desc">Visualización de formas de onda con detección de fases P/S</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="waveform-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Componente</label>
+              <select class="select" id="waveform-component">
+                <option value="all">Todas</option>
+                <option value="Z">Vertical (Z)</option>
+                <option value="N">Norte (N)</option>
+                <option value="E">Este (E)</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Filtro</label>
+              <select class="select" id="waveform-filter">
+                <option value="none">Sin filtro</option>
+                <option value="bandpass">Bandpass</option>
+                <option value="highpass">Highpass</option>
+                <option value="lowpass">Lowpass</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">fmin (Hz)</label>
+              <input type="number" class="input" id="waveform-freqmin" value="0.5" step="0.1" min="0.01" style="width:70px">
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">fmax (Hz)</label>
+              <input type="number" class="input" id="waveform-freqmax" value="25" step="0.5" min="0.1" style="width:70px">
+            </div>
+            <button class="btn btn-secondary" onclick="applyWaveformFilter()">Filtrar</button>
+          </div>
+          <div class="toolbar" style="margin-top:8px">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Baseline</label>
+              <select class="select" id="waveform-baseline">
+                <option value="linear">Lineal</option>
+                <option value="mean">Media</option>
+                <option value="polynomial">Polinómico</option>
+              </select>
+            </div>
+            <button class="btn btn-secondary" onclick="applyWaveformBaseline()">Corregir baseline</button>
+            <button class="btn btn-secondary" onclick="runWaveformQc()">QC</button>
+            <button class="btn btn-primary" onclick="loadWaveform()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+              Cargar
+            </button>
+          </div>
+        </div>
+        <div id="waveform-plot" class="plot-card">
+          <div class="plot-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><polyline points="23 12 19 12 17 8 13 16 11 8 7 16 5 12 1 12"/></svg>
+            <p>Selecciona un dataset y carga el waveform</p>
+          </div>
+        </div>
+        <div id="waveform-qc-results" class="card" style="margin-top:1rem"></div>
+        <div id="waveform-info" class="card hidden" style="margin-top:1rem"></div>
+      </section>
+
+      <!-- Page: Spectrum -->
+      <section id="page-spectrum" class="page">
+        <div class="page-header">
+          <h1>Spectrum Analysis</h1>
+          <p class="page-desc">FFT, PSD, Espectrograma, HVSR y RotD50</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="spectrum-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <button class="btn btn-primary" onclick="loadSpectrum()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-8"/></svg>
+              Analizar
+            </button>
+          </div>
+        </div>
+        <div class="spectrum-tabs" id="spectrum-tabs">
+          <button class="spectrum-tab active" onclick="switchSpectrumTab('fft', this)">FFT</button>
+          <button class="spectrum-tab" onclick="switchSpectrumTab('psd', this)">PSD</button>
+          <button class="spectrum-tab" onclick="switchSpectrumTab('spectrogram', this)">Espectrograma</button>
+          <button class="spectrum-tab" onclick="switchSpectrumTab('hvsr', this)">HVSR</button>
+          <button class="spectrum-tab" onclick="switchSpectrumTab('rotd50', this)">RotD50</button>
+        </div>
+        <div id="spectrum-plot" class="plot-card">
+          <div class="plot-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M3 3v18h18"/><path d="M7 16l4-8 4 4 4-8"/></svg>
+            <p>Selecciona un dataset y tipo de espectro</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Page: Monitor -->
+      <section id="page-monitor" class="page">
+        <div class="page-header">
+          <h1>Real-time Monitor</h1>
+          <p class="page-desc">Monitoreo continuo de PGA con umbrales de alerta configurables</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="monitor-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Umbral PGA</label>
+              <div class="input-group">
+                <input type="number" class="input" id="monitor-threshold" value="50" min="1" max="2000">
+                <span class="input-suffix">cm/s²</span>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="startMonitor()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Iniciar
+            </button>
+            <button class="btn btn-danger" onclick="stopMonitor()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+              Detener
+            </button>
+          </div>
+        </div>
+        <div id="monitor-plot" class="plot-card">
+          <div class="plot-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <p>Presiona "Iniciar" para comenzar el monitoreo</p>
+          </div>
+        </div>
+        <div id="monitor-alerts" class="alerts-container"></div>
+      </section>
+
+      <!-- Page: Location -->
+      <section id="page-location" class="page">
+        <div class="page-header">
+          <h1>Location 1D</h1>
+          <p class="page-desc">Localización de hipocentros por grid-search</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="location-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Vp (km/s)</label>
+              <input type="number" class="input" id="location-vp" value="6.0" step="0.1" min="3" max="8.5" style="width:70px">
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Vs (km/s)</label>
+              <input type="number" class="input" id="location-vs" value="3.46" step="0.1" min="1.5" max="5" style="width:70px">
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Grid step (km)</label>
+              <input type="number" class="input" id="location-grid-step" value="2" step="0.5" min="0.5" max="20" style="width:70px">
+            </div>
+            <button class="btn btn-primary" onclick="runLocation()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+              Calcular ubicación
+            </button>
+            <button class="btn btn-secondary" onclick="locationMock()">
+              Demo
+            </button>
+          </div>
+        </div>
+        <div id="location-plot" class="plot-card">
+          <div class="plot-empty">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><circle cx="12" cy="10" r="3"/><path d="M12 21.7C17.3 17 20 13 20 10a8 8 0 10-16 0c0 3 2.7 7 8 11.7z"/></svg>
+            <p>Ejecuta la demo para ver resultados de localización</p>
+          </div>
+        </div>
+        <div id="location-results" class="card hidden"></div>
+      </section>
+
+      <!-- Page: Report -->
+      <section id="page-report" class="page">
+        <div class="page-header">
+          <h1>Reporte Final</h1>
+          <p class="page-desc">Informe integrado con intensity measures, picks y análisis espectral</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="report-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <button class="btn btn-primary" onclick="generateReport()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Generar Reporte
+            </button>
+            <button class="btn btn-secondary" onclick="downloadReportHtml()">📥 HTML</button>
+            <button class="btn btn-secondary" onclick="downloadReportExcel()">📥 Excel</button>
+          </div>
+        </div>
+        <div id="report-content" class="card hidden"></div>
+      </section>
+
+      <!-- Page: Magnitude -->
+      <section id="page-magnitude" class="page">
+        <div class="page-header">
+          <h1>Estimación de Magnitud</h1>
+          <p class="page-desc">Magnitud local ML vía Wood-Anderson — calibración CSN Chile</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Dataset</label>
+              <select class="select" id="magnitude-dataset"><option value="">Seleccionar...</option></select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Traza</label>
+              <select class="select" id="magnitude-trace"><option value="0">0</option></select>
+            </div>
+            <button class="btn btn-primary" onclick="estimateMagnitude()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Estimar ML
+            </button>
+          </div>
+        </div>
+        <div id="magnitude-result"></div>
+      </section>
+
+      <!-- Page: Batch -->
+      <section id="page-batch" class="page">
+        <div class="page-header">
+          <h1>Cargador Batch</h1>
+          <p class="page-desc">Carga masiva de archivos MiniSEED desde carpetas estructuradas</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Ruta raíz datos</label>
+              <input type="text" class="input" id="batch-root" value="data/" style="width:200px">
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Factor diezmado</label>
+              <select class="select" id="batch-decimate">
+                <option value="1">×1 (sin decimación)</option>
+                <option value="2">×2</option>
+                <option value="4">×4</option>
+                <option value="8">×8</option>
+                <option value="10">×10</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Merge MiniSEED</label>
+              <input type="checkbox" id="batch-merge" checked>
+            </div>
+            <button class="btn btn-primary" onclick="batchScanAndLoad()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Escanear y cargar
+            </button>
+          </div>
+          <details style="margin-top:0.5rem">
+            <summary>Resultado del escaneo</summary>
+            <div id="batch-scan-results" style="margin-top:0.5rem"></div>
+          </details>
+        </div>
+        <div id="batch-progress" class="card hidden" style="margin-top:1rem"></div>
+      </section>
+
+      <!-- Page: Telemetry -->
+      <section id="page-telemetry" class="page">
+        <div class="page-header">
+          <h1>Telemetría Gecko</h1>
+          <p class="page-desc">Series temporales de temperatura, PGA pico, batería — análisis IA</p>
+        </div>
+        <div class="card">
+          <div class="toolbar">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Fuente</label>
+              <select class="select" id="telemetry-source">
+                <option value="upload">Subir archivo CSV</option>
+                <option value="data">Buscar en data/</option>
+              </select>
+            </div>
+            <div class="toolbar-group" id="telemetry-upload-group">
+              <input type="file" id="telemetry-file" accept=".csv,.txt,.xlsx" style="display:none" onchange="handleTelemetryFile(this.files[0])">
+              <button class="btn btn-secondary" onclick="document.getElementById('telemetry-file').click()">Seleccionar archivo</button>
+            </div>
+          </div>
+          <div class="toolbar" style="margin-top:8px">
+            <div class="toolbar-group">
+              <label class="toolbar-label">Resample</label>
+              <select class="select" id="telemetry-resample">
+                <option value="">Sin resampleo</option>
+                <option value="15min">15 min</option>
+                <option value="1H">1 hora</option>
+                <option value="6H">6 horas</option>
+                <option value="1D">1 día</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Agregación</label>
+              <select class="select" id="telemetry-agg">
+                <option value="mean">Media</option>
+                <option value="max">Máximo</option>
+                <option value="min">Mínimo</option>
+              </select>
+            </div>
+            <div class="toolbar-group">
+              <label class="toolbar-label">Suavizado</label>
+              <input type="checkbox" id="telemetry-smooth">
+            </div>
+            <button class="btn btn-primary" onclick="loadTelemetry()">Cargar telemetría</button>
+          </div>
+        </div>
+        <div id="telemetry-plot" class="plot-card" style="margin-top:1rem">
+          <div class="plot-empty"><p>Sube un archivo CSV para ver telemetría</p></div>
+        </div>
+        <div id="telemetry-stats" class="card hidden" style="margin-top:1rem"></div>
+      </section>
+
+      <!-- Page: Help -->
+      <section id="page-help" class="page">
+        <div class="page-header">
+          <h1>Centro de Ayuda</h1>
+        </div>
+        <div class="card">
+          <h3>🚀 Inicio Rápido</h3>
+          <ol style="padding-left:1.5rem">
+            <li><strong>Upload</strong> — Carga archivos MiniSEED, SAC, SEG-2, Gecko desde la página Upload</li>
+            <li><strong>Waveform</strong> — Selecciona el dataset, filtra, ejecuta QC, aplica corrección de baseline</li>
+            <li><strong>Spectrum</strong> — Calcula FFT, PSD, HVSR, RotD50 con parámetros configurables</li>
+            <li><strong>Monitor</strong> — Visualiza PGA por traza con umbrales de alerta</li>
+            <li><strong>Location</strong> — Calcula epicentro con grid-search 1D (requiere picks P/S)</li>
+            <li><strong>Magnitud</strong> — Estima ML con calibración CSN Chile</li>
+            <li><strong>Reporte</strong> — Genera informe HTML/Excel con todos los resultados</li>
+          </ol>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>📋 Formatos soportados</h3>
+          <table class="table-wrap">
+            <thead><tr><th>Formato</th><th>Extensiones</th><th>Notas</th></tr></thead>
+            <tbody>
+              <tr><td>MiniSEED</td><td>.ms, .mseed</td><td>Estándar IRIS</td></tr>
+              <tr><td>SAC</td><td>.sac</td><td>Formación sismológica estándar</td></tr>
+              <tr><td>SEG-2</td><td>.seg2, .sg2</td><td>Formatos antiguos</td></tr>
+              <tr><td>PC-SUDS</td><td>.suds</td><td> Formato obsoleto</td></tr>
+              <tr><td>Gecko</td><td>.bin</td><td>Histograma de acelerógrafo ACE</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>🎛️ Parámetros de filtro recomendados</h3>
+          <table class="table-wrap">
+            <thead><tr><th>Tipo de evento</th><th>fmin (Hz)</th><th>fmax (Hz)</th></tr></thead>
+            <tbody>
+              <tr><td>Regional (≤300 km)</td><td>0.5</td><td>25</td></tr>
+              <tr><td>Teletérmino (>300 km)</td><td>0.1</td><td>10</td></tr>
+              <tr><td>Microtemblores</td><td>1.0</td><td>50</td></tr>
+              <tr><td>Near-fault</td><td>0.05</td><td>40</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>❓ FAQ</h3>
+          <details><summary>¿Cómo funciona la detección P/S?</summary><p>STA/LTA sobre la traza vertical pre-filtrada 2-15 Hz. Score>3 activa P. Para S se estima desde Δt P-S con Vp/Vs=1.73.</p></details>
+          <details><summary>¿Qué es HVSR?</summary><p>Método Nakamura (1989): H/V = sqrt(PSD_H1 × PSD_H2) / PSD_Z. El pico f₀ aproxima la frecuencia de resonancia del suelo.</p></details>
+          <details><summary>¿Qué calibración de magnitud se usa?</summary><p>ML Richter con función de atenuación CSN Chile: log₁₀(A₀) = 0.020·R + 2.10 (R<70 km) o 0.0038·R + 3.00 (R≥70 km).</p></details>
+          <details><summary>¿Cómo exportar datos?</summary><p>Usa el botón "Generar Reporte" en la página Reporte. Descarga HTML autocontenido con gráficos o Excel con IMs y picks.</p></details>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>📡 API endpoints</h3>
+          <table class="table-wrap">
+            <thead><tr><th>Endpoint</th><th>Método</th><th>Descripción</th></tr></thead>
+            <tbody>
+              <tr><td>/api/datasets/{name}/waveform</td><td>GET</td><td>Todas las trazas con IMs y picks</td></tr>
+              <tr><td>/api/datasets/{name}/qc</td><td>GET</td><td>Veredictos QC por traza</td></tr>
+              <tr><td>/api/datasets/{name}/filter</td><td>POST</td><td>Filtro digital con parámetros</td></tr>
+              <tr><td>/api/datasets/{name}/baseline</td><td>POST</td><td>Corrección de baseline</td></tr>
+              <tr><td>/api/datasets/{name}/spectrum/fft</td><td>GET</td><td>FFT real con Plotly JSON</td></tr>
+              <tr><td>/api/datasets/{name}/spectrum/psd</td><td>GET</td><td>PSD Welch real</td></tr>
+              <tr><td>/api/datasets/{name}/spectrum/spectro</td><td>GET</td><td>Espectrograma real</td></tr>
+              <tr><td>/api/datasets/{name}/spectrum/hvsr</td><td>GET</td><td>HVSR Nakamura real</td></tr>
+              <tr><td>/api/datasets/{name}/spectrum/rotd50</td><td>GET</td><td>RotD50/100</td></tr>
+              <tr><td>/api/datasets/{name}/magnitude</td><td>GET</td><td>ML Wood-Anderson</td></tr>
+              <tr><td>/api/datasets/{name}/location</td><td>POST</td><td>Grid-search 1D</td></tr>
+              <tr><td>/api/datasets/{name}/report/html</td><td>GET</td><td>Reporte HTML</td></tr>
+              <tr><td>/api/datasets/{name}/report/excel</td><td>GET</td><td>Exportar Excel</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module">
+    import './js/api.js';
+    import './js/app.js';
+    import './js/upload.js';
+    import './js/waveform.js';
+    import './js/spectrum.js';
+    import './js/monitor.js';
+    import './js/report.js';
+    import './js/location.js';
+    import './js/magnitude.js';
+    import './js/batch.js';
+    import './js/telemetry.js';
+    import './js/help.js';
+  </script>
+  <script nomodule>
+    document.write('<script src="js/api.js"><\/script>');
+    document.write('<script src="js/app.js"><\/script>');
+    document.write('<script src="js/upload.js"><\/script>');
+    document.write('<script src="js/waveform.js"><\/script>');
+    document.write('<script src="js/spectrum.js"><\/script>');
+    document.write('<script src="js/monitor.js"><\/script>');
+    document.write('<script src="js/report.js"><\/script>');
+    document.write('<script src="js/location.js"><\/script>');
+    document.write('<script src="js/magnitude.js"><\/script>');
+    document.write('<script src="js/batch.js"><\/script>');
+    document.write('<script src="js/telemetry.js"><\/script>');
+    document.write('<script src="js/help.js"><\/script>');
+  </script>
+</body>
+</html>

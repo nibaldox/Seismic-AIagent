@@ -206,11 +206,12 @@ def show_configuration_guide():
         """)
         
         st.code("""
-        # Configuración en config/agno_config.yaml
-        seismic_interpreter:
-          default_model:
-            provider: "openrouter"
-            id: "deepseek/deepseek-chat-v3.1:free"
+        # Configuración en config/agents_config.yaml
+        agents:
+          qc_agent:
+            model:
+              provider: "openrouter"
+              id: "deepseek/deepseek-chat-v3.1:free"
           
           task_models:
             waveform_analysis:

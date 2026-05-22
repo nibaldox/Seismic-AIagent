@@ -10,6 +10,7 @@ import pytest
 
 from src.core.data_reader import (
     DataReader,
+    DataReadError,
     UnsupportedFormatError,
     _get_obspy_module,
     _resolve_descriptor,
@@ -20,8 +21,8 @@ from src.core.kelunji_metadata import load_kelunji_metadata
 @pytest.mark.skipif(importlib.util.find_spec("obspy") is not None, reason="ObsPy instalado")
 def test_data_reader_requires_obspy():
     reader = DataReader()
-    with pytest.raises(ImportError):
-        reader.load_bytes(buffer=BytesIO(b""))
+    with pytest.raises(DataReadError):
+        reader.load_bytes(buffer=BytesIO(b""), format_hint="mseed")
 
 
 def test_resolve_descriptor_unknown_extension():

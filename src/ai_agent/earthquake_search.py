@@ -1,46 +1,9 @@
-from __future__ import annotations
-
-# --- Correlación catálogo ↔ picks ---
-def correlacion_catalogo_picks(eventos: List[Dict[str, Any]], picks: List[Dict[str, Any]], ventana_s: float = 10.0) -> str:
-    """
-    Correlaciona eventos del catálogo con picks locales por matching temporal.
-    Retorna resumen Markdown.
-    """
-    if not eventos or not picks:
-        return "No hay eventos ni picks para correlacionar."
-    lines = ["# Correlación catálogo ↔ picks", f"Ventana de matching: ±{ventana_s:.1f} s", ""]
-    for ev in eventos:
-        properties = ev.get("properties", {})
-        ev_time = properties.get("time")
-        ev_mag = properties.get("mag", "?")
-        ev_place = properties.get("place", "?")
-        if not ev_time:
-            continue
-        ev_dt = datetime.utcfromtimestamp(ev_time / 1000)
-        matches = []
-        for pk in picks:
-            pk_time = pk.get("time_abs") or pk.get("time_rel")
-            if pk_time is None:
-                continue
-            # Si pk_time es relativo, ignorar; si es absoluto, comparar
-            if isinstance(pk_time, (int, float)):
-                delta = abs((ev_time / 1000) - pk_time)
-                if delta <= ventana_s:
-                    matches.append(pk)
-        if matches:
-            lines.append(f"- Evento M{ev_mag} {ev_place} {ev_dt} correlacionado con {len(matches)} pick(s):")
-            for pk in matches:
-                phase = pk.get("phase", "?")
-                station = pk.get("station", "?")
-                channel = pk.get("channel", "?")
-                lines.append(f"    - Pick {phase} {station}.{channel} t={pk.get('time_abs', pk.get('time_rel'))}")
-        else:
-            lines.append(f"- Evento M{ev_mag} {ev_place} {ev_dt} sin picks correlacionados.")
-    return "\n".join(lines)
 """Utilities to search external earthquake catalogues."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -80,7 +43,7 @@ class EarthquakeQuery:
         if self.start is not None and self.end is not None:
             starttime, endtime = self.start, self.end
         else:
-            endtime = datetime.utcnow()
+            endtime = datetime.now(UTC)
             starttime = endtime - timedelta(days=self.days)
         return {
             "format": "geojson",
@@ -167,7 +130,7 @@ class EarthquakeSearcher:
         magnitude = properties.get("mag", "?")
         place = properties.get("place", "Unknown location")
         time = properties.get("time")
-        timestamp = datetime.utcfromtimestamp(time / 1000).isoformat() if time else "Unknown"
+        timestamp = datetime.fromtimestamp(time / 1000, tz=UTC).isoformat() if time else "Unknown"
         return f"M{magnitude} - {place} at {timestamp} UTC"
 
     def summarize_results(self, results: Dict[str, List[Dict[str, Any]]]) -> str:
@@ -197,3 +160,47 @@ class EarthquakeSearcher:
             if source in self.last_errors:
                 lines.append(f"> [warning] ⚠️ {self.last_errors[source]}")
         return "\n".join(lines)
+
+
+def correlacion_catalogo_picks(
+    eventos: List[Dict[str, Any]], picks: List[Dict[str, Any]], ventana_s: float = 10.0
+) -> str:
+    """Correlaciona eventos del catálogo con picks locales por matching temporal."""
+    if not eventos or not picks:
+        return "No hay eventos ni picks para correlacionar."
+    lines = [
+        "# Correlación catálogo ↔ picks",
+        f"Ventana de matching: ±{ventana_s:.1f} s",
+        "",
+    ]
+    for ev in eventos:
+        properties = ev.get("properties", {})
+        ev_time = properties.get("time")
+        ev_mag = properties.get("mag", "?")
+        ev_place = properties.get("place", "?")
+        if not ev_time:
+            continue
+        ev_dt = datetime.fromtimestamp(ev_time / 1000, tz=UTC)
+        matches = []
+        for pk in picks:
+            pk_time = pk.get("time_abs") or pk.get("time_rel")
+            if pk_time is None:
+                continue
+            if isinstance(pk_time, (int, float)):
+                delta = abs((ev_time / 1000) - pk_time)
+                if delta <= ventana_s:
+                    matches.append(pk)
+        if matches:
+            lines.append(
+                f"- Evento M{ev_mag} {ev_place} {ev_dt} correlacionado con {len(matches)} pick(s):"
+            )
+            for pk in matches:
+                phase = pk.get("phase", "?")
+                station = pk.get("station", "?")
+                channel = pk.get("channel", "?")
+                lines.append(
+                    f"    - Pick {phase} {station}.{channel} t={pk.get('time_abs', pk.get('time_rel'))}"
+                )
+        else:
+            lines.append(f"- Evento M{ev_mag} {ev_place} {ev_dt} sin picks correlacionados.")
+    return "\n".join(lines)

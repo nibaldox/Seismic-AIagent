@@ -78,15 +78,15 @@ def _estimate_distance_from_ps(delta_ps: float) -> float:
 def _log10_a0_hutton_boore(distance_km: float) -> float:
     """Piecewise log10 A0(R) approximation (Hutton & Boore 1987, California).
 
-    log10 A0(R) = 0.018 R + 2.17            (R <= 60 km)
-                   0.0038 R + 3.02          (60 < R <= 700 km)
+    Returns NEGATIVE values: log10 A0(R) = -(0.018 R + 2.17)     (R <= 60 km)
+                                          -(0.0038 R + 3.02)    (60 < R <= 700 km)
     Para R > 700 km se mantiene extrapolacion lineal segunda rama.
     """
     if distance_km <= 60.0:
-        return 0.018 * distance_km + 2.17
+        return -(0.018 * distance_km + 2.17)
     if distance_km <= 700.0:
-        return 0.0038 * distance_km + 3.02
-    return 0.0038 * distance_km + 3.02  # extrapolacion simple
+        return -(0.0038 * distance_km + 3.02)
+    return -(0.0038 * distance_km + 3.02)
 
 
 def _compute_ml_hutton_boore(amplitude_mm: float, distance_km: float) -> float:
@@ -94,7 +94,7 @@ def _compute_ml_hutton_boore(amplitude_mm: float, distance_km: float) -> float:
         raise ValueError("Amplitud o distancia invalida para ML")
     log10_a = math.log10(amplitude_mm)
     log10_a0 = _log10_a0_hutton_boore(distance_km)
-    return log10_a - log10_a0
+    return log10_a - log10_a0  # ML = log10(A) - log10(A0); note log10(A0) < 0, so this adds C(R)
 
 
 def estimate_local_magnitude_placeholder(*, picks: Sequence[Dict[str, Any]], trace_data: np.ndarray, trace_sampling_rate: float, station: str) -> MagnitudeResult:
@@ -181,9 +181,15 @@ def _bandpass(data: np.ndarray, sr: float, freqmin: float, freqmax: float) -> np
 def _integrate(data: np.ndarray, sr: float) -> np.ndarray:
     if data.size == 0:
         return data
-    # Simple cumulative integration (trapezoidal) in time domain
     dt = 1.0 / sr
-    return np.cumsum((data[:-1] + data[1:]) * 0.5) * dt
+    vel = np.cumsum((data[:-1] + data[1:]) * 0.5) * dt
+    # Remove linear trend to prevent integration drift (baseline correction)
+    if vel.size > 2:
+        x = np.arange(vel.size, dtype=float)
+        coeffs = np.polyfit(x, vel, 1)
+        linear_trend = np.polyval(coeffs, x)
+        vel = vel - linear_trend
+    return vel
 
 
 def _remove_instrument_response(data: np.ndarray, sr: float, inventory_path: Optional[str] = None, 
@@ -375,9 +381,9 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
                               instrument_response_removed=response_removed, sensor_type=sensor_type, 
                               units_assumed=units_detected)
 
-    # Ventana de amplitud: desde P hasta P + min(DeltaPS*2, 15s)
+    # Ventana de amplitud: desde P hasta P + un maximo de ~90s o 3x delta_PS
     p_time = float(p_pick["time_rel"])
-    win_len = min(delta_ps * 2.0, 15.0)
+    win_len = min(max(delta_ps * 3.0, 30.0), 90.0)
     start_idx = int(p_time * sr)
     end_idx = int((p_time + win_len) * sr)
     end_idx = min(end_idx, wa_mm.size)
@@ -417,7 +423,7 @@ def estimate_local_magnitude_wa_with_response(*, picks: Sequence[Dict[str, Any]]
 
 
 def estimate_local_magnitude_wa(*, picks: Sequence[Dict[str, Any]], trace_data: np.ndarray, trace_sampling_rate: float, station: str) -> MagnitudeResult:
-    """
+    """Estimacion ML aproximada estilo Wood-Anderson (sin respuesta instrumental)."""
     warnings: List[str] = []
     station_picks = [p for p in picks if p.get("station") == station]
     p_pick = next((p for p in station_picks if p.get("phase") == "P"), None)

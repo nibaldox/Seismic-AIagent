@@ -27,10 +27,10 @@ Convención: [ ] pendiente · [x] completado · [~] en curso
     - [x] Integrar en `pytest -q` y actualizar `README.md` (sección Tests)
 7. [x] Límites de costo/latencia IA
     - [x] Configurar en `config/agno_config.yaml` (session_limit, daily_limit, P95)
-    - [x] Modelos “free” por defecto y fallbacks claros
-8. [ ] Perfiles locales (Ollama)
-   - [ ] Añadir perfiles por tarea (analysis/search/coding)
-   - [ ] Comprobación de entorno y mensajes guiados si no está disponible
+    - [x] Modelos "free" por defecto y fallbacks claros
+8. [x] Perfiles locales (Ollama) — 2025-05-22
+    - [x] Añadir perfiles por tarea (analysis/search/coding) en `src/ai_agent/ollama_utils.py`
+    - [x] Comprobación de entorno (`check_ollama_available()`) y mensajes guiados
 9. [x] Generador de reportes
     - [x] Crear `src/ai_agent/report_generator.py` (MD→PDF)
     - [x] Plantilla institucional (encabezado, secciones, metadatos)
@@ -50,34 +50,74 @@ Convención: [ ] pendiente · [x] completado · [~] en curso
 14. [x] ML‑WA con respuesta instrumental
     - [x] Incorporar respuesta del sensor en `src/core/magnitude.py`
     - [x] Advertencias/metadatos en UI (limitaciones y supuestos)
-15. [ ] Localización 3D (MVP)
-    - [ ] Crear `src/core/location/three_d_location.py` (grid o inversión simple)
-    - [ ] Integración mínima en UI (página Location)
-16. [ ] Validación sintética localización 3D
-    - [ ] Generar dataset sintético y medir RMS/errores
-    - [ ] Criterios de aceptación: error ≤ 5 km, RMS ≤ 0.5 s
-17. [ ] Empaquetado desktop
-    - [ ] PyInstaller spec (Windows/Linux)
-    - [ ] README de uso offline y troubleshooting
-18. [ ] Endurecimiento Docker
-    - [ ] Usuario no‑root y FS de solo lectura opcional
-    - [ ] Imagen más pequeña y healthcheck robusto
-19. [ ] Monitoreo y logging
-    - [ ] Logging estructurado (niveles, contexto)
-    - [ ] Guía de diagnóstico de fallos comunes
-20. [ ] Documentación para clientes
-    - [ ] Manual de operación y playbooks de incidencias
-    - [ ] SLA básico y métricas de salud
-21. [ ] Dataset de demo y scripts
-    - [ ] Curar dataset de ejemplo (waveforms + histogramas)
-    - [ ] Script de carga reproducible
-22. [ ] Checklist de piloto
-    - [ ] Lista de verificación para despliegues en cliente
-    - [ ] Validaciones previas y criterios de salida
-23. [ ] Actualización de Roadmap/Bitácora
-    - [ ] Registrar avances y decisiones
-    - [ ] Revisión FODA trimestral y ajuste del plan
+15. [x] Localización 3D (MVP) — 2025-05-22
+    - [x] Extender `src/core/location/one_d_location.py` con z en Station y grid_z
+    - [x] `_dist_3d()` con fórmula euclidiana 3D
+    - [x] Integración en UI: `pages/05_🌍_Location_1D.py` y API (`src/server.py`)
+16. [x] Validación sintética localización 3D — 2025-05-22
+    - [x] Generar dataset sintético en `tests/test_three_d_location.py`
+    - [x] Criterios: error ≤ 5 km, RMS ≤ 0.5 s, repeatability ≥ 80%
+    - [x] Golden snapshots en `tests/golden_three_d_location.json`
+17. [x] Empaquetado desktop — 2025-05-22
+    - [x] `acelerografo.spec` (PyInstaller spec con todos los hidden imports)
+    - [x] `scripts/build_desktop.sh` (build script multi-plataforma)
+    - [x] `docs/OFFLINE.md` (guía de uso offline y troubleshooting)
+    - [x] `.env.example` (template sin API keys)
+18. [x] Endurecimiento Docker — 2025-05-22
+    - [x] `Dockerfile` multi-stage (builder + runtime), USER appuser
+    - [x] `docker-compose.yml` con `read_only`, `tmpfs`, `cap_drop: ALL`
+    - [x] `.dockerignore` (excluye .git, tests/, docs/, __pycache__)
+    - [x] `requirements/base.txt` y `requirements/dev.txt` separados
+19. [x] Monitoreo y logging — 2025-05-22
+    - [x] `src/utils/logger.py` con JSON structured logging + rotating file
+    - [x] `docs/DIAGNOSTIC.md` (guía de diagnóstico, 12 failure modes)
+    - [x] Middleware de trace ID listo para integrar en server.py
+20. [x] Documentación para clientes — 2025-05-22
+    - [x] `docs/CLIENT_MANUAL.md` (operación, playbooks, SLA, métricas)
+    - [x] `docs/PILOT_CHECKLIST.md` (checklist de despliegue)
+    - [x] Actualizado `docs/USER_GUIDE.md` con secciones faltantes (HVSR, RotD50, etc.)
+21. [x] Dataset de demo y scripts — 2025-05-22
+    - [x] `scripts/load_demo.sh` (carga AC-1-SUR hora 14)
+    - [x] `scripts/validate_demo.sh` (verifica que demo carga correctamente)
+    - [x] `data/demo/README.md` (documenta archivos y eventos esperados)
+22. [x] Checklist de piloto — 2025-05-22
+    - [x] `docs/PILOT_CHECKLIST.md` (pre-despliegue, funcionales, performance, salida)
+    - [x] `scripts/validate_pilot.sh` (validaciones automatizadas PASS/FAIL)
+23. [x] Actualización de Roadmap/Bitácora — 2025-05-22
+    - [x] Todas las tareas 8-22 marcadas `[x]` con fecha
+    - [x] `docs/bitacora/rollback-2025-05-22.md` (registro de decisiones)
 
 ---
 
-Sugerencia: Mantén esta lista como única fuente de verdad. Si un ítem requiere dividirse, crea subtareas inmediatamente debajo, conservando el orden de ejecución.
+## Archivos creados/modificados en este bloque
+
+### Nuevos
+- `src/ai_agent/ollama_utils.py` — salud Ollama, mapeo tarea→modelo
+- `src/core/location/__init__.py` — exporta LocationResult + 3D helpers
+- `tests/test_three_d_location.py` — tests sintéticos 3D
+- `tests/golden_three_d_location.json` — snapshots esperados
+- `tests/.env.test` — entorno de testing
+- `acelerografo.spec` — spec PyInstaller
+- `scripts/build_desktop.sh` — script de build
+- `scripts/load_demo.sh` — carga demo
+- `scripts/validate_demo.sh` — valida demo
+- `scripts/validate_pilot.sh` — validaciones piloto
+- `docs/OFFLINE.md` — guía offline
+- `docs/DIAGNOSTIC.md` — guía de diagnóstico
+- `docs/CLIENT_MANUAL.md` — manual de cliente
+- `docs/PILOT_CHECKLIST.md` — checklist piloto
+- `data/demo/README.md` — documentación demo
+- `.dockerignore` — exclusiones Docker
+- `.env.example` — template sin API keys
+- `requirements/base.txt` — deps prod
+- `requirements/dev.txt` — deps dev
+
+### Modificados
+- `src/core/location/one_d_location.py` — soporte 3D (z en Station, grid_z, `_dist_3d`)
+- `src/utils/logger.py` — JSON structured logging + rotating file
+- `src/server.py` — endpoint location con grid_z y coordenadas reales
+- `Dockerfile` — multi-stage build + non-root user
+- `docker-compose.yml` — read_only, tmpfs, cap_drop, security_opt
+- `requirements.txt` — actualizado a base+dev
+
+### Decisiones registradas en `docs/bitacora/rollback-2025-05-22.md`

@@ -209,11 +209,11 @@ def main() -> None:
     else:
         st.warning("Select at least one trace to enable AI interpretation.")
 
-    config = load_yaml("agno_config.yaml").get("seismic_interpreter", {})
+    config = load_yaml("agents_config.yaml")
     st.subheader("AI Analysis")
     
     # Mostrar modelo activo
-    current_model = st.session_state.get("selected_ai_model", "nvidia/nemotron-3-super-120b-a12b:free")
+    current_model = st.session_state.get("selected_ai_model", "deepseek/deepseek-chat-v3.1:free")
     model_display_names = {
         "nvidia/nemotron-3-super-120b-a12b:free": "NVIDIA Nemotron Super 120B",
         "moonshotai/kimi-k2:free": "Moonshot Kimi K2",
@@ -221,7 +221,7 @@ def main() -> None:
         "meituan/longcat-flash-chat": "Meituan LongCat Flash",
         "z-ai/glm-4.5-air:free": "Z-AI GLM 4.5 Air",
         "qwen/qwen3-235b-a22b:free": "Qwen3 235B (non-thinking)",
-        "deepseek/deepseek-chat-v3.1:free": "DeepSeek Chat v3.1 (no disponible)",
+        "deepseek/deepseek-chat-v3.1:free": "DeepSeek Chat v3.1",
     }
     if current_model.startswith("lmstudio:"):
         lm_name = current_model[len("lmstudio:"):]
@@ -585,10 +585,11 @@ def main() -> None:
     with col_md:
         if st.button("📝 Generate Report IA (Markdown)", disabled=not has_analysis):
             try:
-                default_model = config.get("default_model", {})
+                selection_order = config.get("model_selection", {}).get("selection_order", [])
+                primary = selection_order[0] if selection_order else "deepseek/deepseek-chat-v3.1:free"
                 report_agent = build_report_agent(
-                    default_model.get("provider", "openrouter"),
-                    default_model.get("id", "deepseek/deepseek-chat-v3.1:free"),
+                    "openrouter",
+                    primary,
                 )
                 report = generate_markdown_report(
                     report_agent,

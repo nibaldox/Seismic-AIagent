@@ -552,7 +552,7 @@ def main() -> None:
                 if agent_error:
                     st.error(f"No se pudo inicializar el interprete: {agent_error}")
                 else:
-                    st.info("Configura los agentes IA en config/agno_config.yaml.")
+                    st.info("Configura los agentes IA en config/agents_config.yaml.")
             else:
                 summary_text = _build_waveform_context(session, selected_labels)
                 if not summary_text:
